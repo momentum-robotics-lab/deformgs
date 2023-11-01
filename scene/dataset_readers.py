@@ -252,7 +252,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
                             image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
                             time = time))
     return cam_infos
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},skip=None):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None):
     cam_infos = []
 
     with open(os.path.join(path, transformsfile)) as json_file:
@@ -260,41 +260,50 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
-        if skip is None:
-            skip = 1
-        for idx, frame in enumerate(frames[::skip]):
-            # if file_path ends with an extension don't add the extension 
-            file_path = frame["file_path"]
-            viable_extensions = [".png", ".jpg", ".jpeg"]
-            if not any([file_path.endswith(ext) for ext in viable_extensions]):
-                file_path += extension
+        
+        if time_skip is not None:
+            # find all unique timesteps
+            unique_times = np.unique([frame["time"] for frame in frames])
+            kept_times = unique_times[::time_skip]
+
+
+        for idx, frame in tqdm(enumerate(frames),total=len(frames)):
             
-            cam_name = os.path.join(path, file_path)
-            time = mapper[frame["time"]]
-            matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
-            R = -np.transpose(matrix[:3,:3])
-            R[:,0] = -R[:,0]
-            T = -matrix[:3, 3]
+            time = frame["time"]
+            
+            if time_skip is None or time in kept_times:
+                # if file_path ends with an extension don't add the extension 
+                file_path = frame["file_path"]
+                viable_extensions = [".png", ".jpg", ".jpeg"]
+                if not any([file_path.endswith(ext) for ext in viable_extensions]):
+                    file_path += extension
+                
+                cam_name = os.path.join(path, file_path)
+                time = mapper[frame["time"]]
+                matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
+                R = -np.transpose(matrix[:3,:3])
+                R[:,0] = -R[:,0]
+                T = -matrix[:3, 3]
 
-            image_path = os.path.join(path, cam_name)
-            image_name = Path(cam_name).stem
-            image = Image.open(image_path)
+                image_path = os.path.join(path, cam_name)
+                image_name = Path(cam_name).stem
+                image = Image.open(image_path)
 
-            im_data = np.array(image.convert("RGBA"))
+                im_data = np.array(image.convert("RGBA"))
 
-            bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+                bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
 
-            norm_data = im_data / 255.0
-            arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-            image = PILtoTorch(image,(800,800))
-            fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
-            FovY = fovy 
-            FovX = fovx
+                norm_data = im_data / 255.0
+                arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+                image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+                image = PILtoTorch(image,(800,800))
+                fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
+                FovY = fovy 
+                FovX = fovx
 
-            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                            time = time))
+                cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                                image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
+                                time = time))
             
     return cam_infos
 def read_timeline(path):
