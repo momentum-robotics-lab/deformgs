@@ -193,7 +193,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path)
     return scene_info
-def generateCamerasFromTransforms(path, template_transformsfile, extension, maxtime):
+def generateCamerasFromTransforms(path, template_transformsfile, extension, maxtime,time_skip=None):
     trans_t = lambda t : torch.Tensor([
     [1,0,0,0],
     [0,1,0,0],
@@ -225,6 +225,9 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         template_json = json.load(json_file)
         fovx = template_json["camera_angle_x"]
     # load a single image to get image info.
+    
+        
+    
     for idx, frame in enumerate(template_json["frames"]):
         file_path = frame["file_path"]
         viable_extensions = [".png", ".jpg", ".jpeg"]
