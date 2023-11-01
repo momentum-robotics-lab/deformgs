@@ -322,14 +322,14 @@ def read_timeline(path):
         timestamp_mapper[time] = time/max_time_float
 
     return timestamp_mapper, max_time_float
-def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
+def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None):
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip)
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip)
     print("Generating Video Transforms")
-    video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time)
+    video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
