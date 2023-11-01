@@ -226,7 +226,12 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         fovx = template_json["camera_angle_x"]
     # load a single image to get image info.
     for idx, frame in enumerate(template_json["frames"]):
-        cam_name = os.path.join(path, frame["file_path"] + extension)
+        file_path = frame["file_path"]
+        viable_extensions = [".png", ".jpg", ".jpeg"]
+        if not any([file_path.endswith(ext) for ext in viable_extensions]):
+            file_path += extension
+        cam_name = os.path.join(path, file_path)
+        
         image_path = os.path.join(path, cam_name)
         image_name = Path(cam_name).stem
         image = Image.open(image_path)
@@ -247,7 +252,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
                             image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
                             time = time))
     return cam_infos
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {}):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},skip=None):
     cam_infos = []
 
     with open(os.path.join(path, transformsfile)) as json_file:
@@ -255,8 +260,16 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
-        for idx, frame in enumerate(frames):
-            cam_name = os.path.join(path, frame["file_path"] + extension)
+        if skip is None:
+            skip = 1
+        for idx, frame in enumerate(frames[::skip]):
+            # if file_path ends with an extension don't add the extension 
+            file_path = frame["file_path"]
+            viable_extensions = [".png", ".jpg", ".jpeg"]
+            if not any([file_path.endswith(ext) for ext in viable_extensions]):
+                file_path += extension
+            
+            cam_name = os.path.join(path, file_path)
             time = mapper[frame["time"]]
             matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
             R = -np.transpose(matrix[:3,:3])

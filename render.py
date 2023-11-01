@@ -71,11 +71,11 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
 
         if not skip_train:
             render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background)
-
         if not skip_test:
             render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
         if not skip_video:
             render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background)
+            
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Testing script parameters")
@@ -88,6 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--configs", type=str)
+    parser.add_argument("--log_deforms", action="store_true")
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)
     if args.configs:
