@@ -11,11 +11,12 @@
 
 import torch
 import math
+import numpy as np
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform=False):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None):
     """
     Render the scene. 
     
@@ -77,6 +78,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         means3D_deform, scales_deform, rotations_deform, opacity_deform = pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
                                                                          time[deformation_point])
+        
+        if log_deform_path is not None:
+            np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_deform.cpu().numpy())
+
+
     # print(time.max())
     with torch.no_grad():
         pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
