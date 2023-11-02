@@ -326,6 +326,7 @@ def read_timeline(path):
 
     return timestamp_mapper, max_time_float
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None):
+    # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip)

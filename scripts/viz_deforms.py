@@ -2,10 +2,12 @@ from argparse import ArgumentParser
 import numpy as np 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import glob 
+import os
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument('--deforms', type=str, default='workspace')
+    parser.add_argument('--dir', type=str, default='workspace')
     parser.add_argument('--slice',type=int,default=10)
     parser.add_argument('--z_max',type=float,default=None)
     parser.add_argument('--animation',action='store_true')
@@ -46,22 +48,31 @@ def plot_deforms(xyzs, xyzs_deformed,args):
     plt.show()
 
 
+def plot(trajs,xyszs,times):
+    print('tada!')
+
 def main():
     args = parse_args()
-    deforms_data = np.load(args.deforms)
-    xyzs = deforms_data['means3D']
-    xyzs_deformed = deforms_data['means3D_deform']
 
-    if args.z_max is not None:
-        xyzs = xyzs[xyzs_deformed[:,2] < args.z_max]
-        xyzs_deformed = xyzs_deformed[xyzs_deformed[:,2] < args.z_max]
+    npz_files = glob.glob(os.path.join(args.dir,'log_deform_*.npz'),recursive=True)
+    # sort based on the float number in the file name
+    npz_files.sort(key=lambda f: float(''.join(filter(str.isdigit, f))))
+    times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
+   
+    for npz_file in npz_files:
+        deforms_data = np.load(npz_file)
+        xyzs = deforms_data['means3D']
+        xyzs_deformed = deforms_data['means3D_deform']
 
+        if args.z_max is not None:
+            xyzs = xyzs[xyzs_deformed[:,2] < args.z_max]
+            xyzs_deformed = xyzs_deformed[xyzs_deformed[:,2] < args.z_max]
 
-    print('xyzs shape: ', xyzs.shape)
-    print('xyz_deformed shape: ', xyzs_deformed.shape)
+        print('xyzs shape: ', xyzs.shape)
+        print('xyz_deformed shape: ', xyzs_deformed.shape)
     
 
-    plot_deforms(xyzs, xyzs_deformed,args)
+    # plot_deforms(xyzs, xyzs_deformed,args)
 
 
 if __name__ == '__main__':

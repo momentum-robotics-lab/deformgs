@@ -34,12 +34,20 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     gt_list = []
     render_list = []
     
+    all_times = [view.time for view in views]
+    todo_times = np.unique(all_times)
+
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         log_deform_path = None
 
-        if log_deform:
-            log_deform_path = os.path.join(model_path, name, "ours_{}".format(iteration), "log_deform_{}_{}".format(idx,view.time))
+        view_time = view.time
+
+        if log_deform and view_time in todo_times:
+            log_deform_path = os.path.join(model_path, name, "ours_{}".format(iteration), "log_deform_{}".format(view.time))
+
+            # remove time from todo_times
+            todo_times = todo_times[todo_times != view_time]
 
         rendering = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)["render"]
         # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))

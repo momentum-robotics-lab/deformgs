@@ -321,6 +321,7 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")
+    parser.add_argument("--time_skip",type=int,default=None)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
