@@ -48,7 +48,22 @@ def plot_deforms(xyzs, xyzs_deformed,args):
     plt.show()
 
 
-def plot(trajs,xyszs,times):
+def plot_trajs(trajs,args):
+    # trajs: N x P x 3
+    # N: number of points in each trajectory, time steps
+    # P: number of trajectories
+    # 3: x,y,z
+
+    N, P, _ = trajs.shape
+
+    # plot 3d trajectories
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.set_aspect('equal', adjustable='box')
+    for i in range(P)[::args.slice]:
+        ax.plot(trajs[:,i,0],trajs[:,i,1],trajs[:,i,2])
+    plt.show()
+
     print('tada!')
 
 def main():
@@ -58,20 +73,22 @@ def main():
     # sort based on the float number in the file name
     npz_files.sort(key=lambda f: float(''.join(filter(str.isdigit, f))))
     times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
-   
+    trajs = []
     for npz_file in npz_files:
         deforms_data = np.load(npz_file)
         xyzs = deforms_data['means3D']
         xyzs_deformed = deforms_data['means3D_deform']
-
-        if args.z_max is not None:
-            xyzs = xyzs[xyzs_deformed[:,2] < args.z_max]
-            xyzs_deformed = xyzs_deformed[xyzs_deformed[:,2] < args.z_max]
+        trajs.append(xyzs_deformed)
+        # if args.z_max is not None:
+        #     xyzs = xyzs[xyzs_deformed[:,2] < args.z_max]
+        #     xyzs_deformed = xyzs_deformed[xyzs_deformed[:,2] < args.z_max]
 
         print('xyzs shape: ', xyzs.shape)
         print('xyz_deformed shape: ', xyzs_deformed.shape)
     
-
+    trajs = np.stack(trajs)
+    plot_trajs(trajs,args)
+    print(trajs.shape)
     # plot_deforms(xyzs, xyzs_deformed,args)
 
 
