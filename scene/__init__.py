@@ -15,7 +15,7 @@ import json
 from utils.system_utils import searchForMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
-from scene.dataset import FourDGSdataset
+from scene.dataset import FourDGSdataset, MDNerfDataset
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
 from torch.utils.data import Dataset
@@ -87,11 +87,20 @@ class Scene:
             # self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
             # print("Loading Video Cameras")
             # self.video_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.video_cameras, resolution_scale, args)
-        print("Loading Training Cameras")
-        self.train_camera = FourDGSdataset(scene_info.train_cameras, args)
-        print("Loading Test Cameras")
-        self.test_camera = FourDGSdataset(scene_info.test_cameras, args)
-        print("Loading Video Cameras")
+        
+        if user_args.three_steps_batch:
+            print("Loading Training Cameras")
+            self.train_camera = MDNerfDataset(scene_info.train_cameras, args)
+            print("Loading Test Cameras")
+            self.test_camera = MDNerfDataset(scene_info.test_cameras, args)
+            print("Loading Video Cameras")
+        else:
+            self.train_camera = FourDGSdataset(scene_info.train_cameras, args)
+            self.test_camera = FourDGSdataset(scene_info.test_cameras, args)
+        
+        self.train_camera_individual = FourDGSdataset(scene_info.train_cameras, args)
+        self.test_camera_individual = FourDGSdataset(scene_info.test_cameras, args)
+        
         self.video_camera = cameraList_from_camInfos(scene_info.video_cameras,-1,args)
         xyz_max = scene_info.point_cloud.points.max(axis=0)
         xyz_min = scene_info.point_cloud.points.min(axis=0)
@@ -131,5 +140,12 @@ class Scene:
 
     def getTestCameras(self, scale=1.0):
         return self.test_camera
+    
+    def getTrainCamerasIndividual(self, scale=1.0):
+        return self.train_camera_individual
+    
+    def getTestCamerasIndividual(self, scale=1.0):
+        return self.test_camera_individual
+    
     def getVideoCameras(self, scale=1.0):
         return self.video_camera

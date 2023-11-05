@@ -103,6 +103,8 @@ if __name__ == "__main__":
     parser.add_argument("--configs", type=str)
     parser.add_argument("--time_skip",type=int,default=None)
     parser.add_argument("--log_deform", action="store_true")
+    parser.add_argument("--three_steps_batch",type=bool,default=False)
+
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)
     if args.configs:

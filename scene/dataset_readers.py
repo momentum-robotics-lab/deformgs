@@ -40,6 +40,8 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
     time : float
+    view_id: int 
+    time_id: int
    
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -253,7 +255,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         FovX = fovx
         cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                             image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
-                            time = time))
+                            time = time,time_id=None,view_id=None))
     return cam_infos
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None):
     cam_infos = []
@@ -281,6 +283,14 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 if not any([file_path.endswith(ext) for ext in viable_extensions]):
                     file_path += extension
                 
+                file_name = file_path.split("/")[-1]
+                if any([file_path.endswith(ext) for ext in viable_extensions]):
+                    file_name = file_name.split(".")[0]
+                
+                # format is r_viewid_timeid
+                view_id = int(file_name.split("_")[1])
+                time_id = int(file_name.split("_")[2])
+
                 cam_name = os.path.join(path, file_path)
                 time = mapper[frame["time"]]
                 matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
@@ -306,7 +316,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time))
+                                time = time,view_id=view_id,time_id=time_id))
             
     return cam_infos
 def read_timeline(path):
