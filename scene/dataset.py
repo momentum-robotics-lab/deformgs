@@ -71,9 +71,12 @@ class MDNerfDataset(Dataset):
         view_id = idx
         
         mean_time_id = np.random.randint(1,self.n_times-1)
-        return [self.get_one_item(view_id,mean_time_id-1),
+        all_steps = [self.get_one_item(view_id,mean_time_id-1),
                 self.get_one_item(view_id,mean_time_id),
                 self.get_one_item(view_id,mean_time_id+1)]
+        
+       
+        return all_steps
         
 
     def get_one_item(self, view_id, time_id):

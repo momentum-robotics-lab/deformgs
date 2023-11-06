@@ -31,10 +31,7 @@ def plot_deforms(xyzs, xyzs_deformed,args):
     ax.set_xlabel('x [m]')
     ax.set_ylabel('y [m]')
     ax.set_zlabel('z [m]')
-
     ax.set_aspect('equal', adjustable='box')
-
-
 
     if args.animation:
 
@@ -59,9 +56,25 @@ def plot_trajs(trajs,args):
     # plot 3d trajectories
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ax.set_aspect('equal', adjustable='box')
     for i in range(P)[::args.slice]:
         ax.plot(trajs[:,i,0],trajs[:,i,1],trajs[:,i,2])
+
+
+    ax.set_xlabel('x [m]')
+    ax.set_ylabel('y [m]')
+    ax.set_zlabel('z [m]')
+    ax.set_aspect('equal', adjustable='box')
+    
+    if args.animation:
+
+        def rotate(angle):
+            ax.view_init(azim=angle)
+        
+        rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 362, 2), interval=30)
+        rot_animation.save('rotation.gif', dpi=80, writer='imagemagick')
+    
+    
+
     plt.show()
 
     print('tada!')

@@ -25,6 +25,7 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHiddenParams
 from torch.utils.data import DataLoader
 from utils.timer import Timer
+import wandb 
 
 import lpips
 from utils.scene_utils import render_training_image
@@ -111,6 +112,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         radii_list = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
+        all_means_3D_deform = []
+                 
         for viewpoint_cam in viewpoint_cams:
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -120,8 +123,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             radii_list.append(radii.unsqueeze(0))
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
+
+            if user_args.lambda_momentum > 0 and stage=="fine" :
+                all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
         
-        
+                    
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
@@ -135,6 +141,14 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
 
         loss = Ll1
+        
+        
+        if user_args.lambda_momentum > 0 and stage == "fine":
+            all_means_3D_deform = torch.cat(all_means_3D_deform,0)
+            l_reg = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
+            l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
+            loss += user_args.lambda_momentum * l_reg.mean()
+            
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
             tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.plane_tv_weight, hyper.l1_time_planes)
@@ -323,6 +337,13 @@ if __name__ == "__main__":
     parser.add_argument("--configs", type=str, default = "")
     parser.add_argument("--time_skip",type=int,default=None)
     parser.add_argument("--three_steps_batch",type=bool,default=True)
+    parser.add_argument("--use_wandb",action="store_true",default=False)
+    parser.add_argument("--wandb_project",type=str,default="test_project")
+    parser.add_argument("--wandb_name",type=str,default="test_name")
+    
+    
+    # regularization
+    parser.add_argument("--lambda_momentum",default=0.0,type=float)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
