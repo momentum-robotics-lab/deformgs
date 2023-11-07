@@ -23,7 +23,7 @@ class Deformation(nn.Module):
 
         self.no_grid = args.no_grid
         self.grid = HexPlaneField(args.bounds, args.kplanes_config, args.multires)
-        self.pos_deform, self.scales_deform, self.rotations_deform, self.opacity_deform = self.create_net()
+        self.pos_deform, self.scales_deform, self.rotations_deform, self.opacity_deform, self.shadow_net = self.create_net()
         self.args = args
     def create_net(self):
         
@@ -42,7 +42,8 @@ class Deformation(nn.Module):
             nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 3)),\
             nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 3)),\
             nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 4)), \
-            nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 1))
+            nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 1)), \
+            nn.Sequential(nn.ReLU(),nn.Linear(self.W,self.W),nn.ReLU(),nn.Linear(self.W, 1),nn.Sigmoid())  # shadow net ending with sigmoid to cap in [0,1]
     
     def query_time(self, rays_pts_emb, scales_emb, rotations_emb, time_emb):
 
@@ -88,8 +89,10 @@ class Deformation(nn.Module):
             opacity = opacity_emb[:,:1] + do
         # + do
         # print("deformation value:","pts:",torch.abs(dx).mean(),"rotation:",torch.abs(dr).mean())
+        shadow_scalars = self.shadow_net(hidden)
 
-        return pts, scales, rotations, opacity
+        return pts, scales, rotations, opacity, shadow_scalars
+    
     def get_mlp_parameters(self):
         parameter_list = []
         for name, param in self.named_parameters():
@@ -135,13 +138,13 @@ class deform_network(nn.Module):
     def forward_dynamic(self, point, scales=None, rotations=None, opacity=None, times_sel=None):
         # times_emb = poc_fre(times_sel, self.time_poc)
 
-        means3D, scales, rotations, opacity = self.deformation_net( point,
+        means3D, scales, rotations, opacity, shadow_scalars = self.deformation_net( point,
                                                   scales,
                                                 rotations,
                                                 opacity,
                                                 # times_feature,
                                                 times_sel)
-        return means3D, scales, rotations, opacity
+        return means3D, scales, rotations, opacity, shadow_scalars
     def get_mlp_parameters(self):
         return self.deformation_net.get_mlp_parameters() + list(self.timenet.parameters())
     def get_grid_parameters(self):
