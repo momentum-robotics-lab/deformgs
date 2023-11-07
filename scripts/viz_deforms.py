@@ -57,7 +57,8 @@ def plot_trajs(trajs,args):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     for i in range(P)[::args.slice]:
-        ax.plot(trajs[:,i,0],trajs[:,i,1],trajs[:,i,2])
+        if args.z_max is None or max(trajs[:,i,2]) < args.z_max:
+            ax.plot(trajs[:,i,0],trajs[:,i,1],trajs[:,i,2])
 
 
     ax.set_xlabel('x [m]')
@@ -70,7 +71,7 @@ def plot_trajs(trajs,args):
         def rotate(angle):
             ax.view_init(azim=angle)
         
-        rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 362, 2), interval=30)
+        rot_animation = animation.FuncAnimation(fig, rotate, frames=np.arange(0, 362, 2), interval=50)
         rot_animation.save('rotation.gif', dpi=80, writer='imagemagick')
     
     

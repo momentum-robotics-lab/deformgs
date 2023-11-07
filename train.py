@@ -113,9 +113,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         visibility_filter_list = []
         viewspace_point_tensor_list = []
         all_means_3D_deform = []
-                 
+        
         for viewpoint_cam in viewpoint_cams:
-            render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage)
+            
+            render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             images.append(image.unsqueeze(0))
             gt_image = viewpoint_cam.original_image.cuda()
@@ -126,7 +127,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             if user_args.lambda_momentum > 0 and stage=="fine" :
                 all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
-        
+
+        shadows_mean = render_pkg["shadows_mean"]
+        if user_args.use_wandb and shadows_mean is not None:
+            wandb.log({"train/shadows_mean":render_pkg["shadows_mean"],"train/shadows_std":render_pkg["shadows_std"]},step=iteration)
                     
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -137,17 +141,24 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # Ll1 = l2_loss(image, gt_image)
 
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
+        
         # norm
         
 
         loss = Ll1
+        if user_args.use_wandb:
+            wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
         
+        
+        all_means_3D_deform = torch.cat(all_means_3D_deform,0)
+        l_reg = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
+        l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
         
         if user_args.lambda_momentum > 0 and stage == "fine":
-            all_means_3D_deform = torch.cat(all_means_3D_deform,0)
-            l_reg = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
-            l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
             loss += user_args.lambda_momentum * l_reg.mean()
+
+        if user_args.use_wandb: 
+            wandb.log({"train/l_reg":l_reg},step=iteration)
             
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
@@ -181,7 +192,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             # Log and save
             timer.pause()
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, [pipe, background], stage)
+            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, [pipe, background], stage,user_args=user_args)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration, stage)
@@ -237,9 +248,9 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     timer = Timer()
     scene = Scene(dataset, gaussians, load_coarse=None, user_args=user_args)
     timer.start()
-    # scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
-    #                          checkpoint_iterations, checkpoint, debug_from,
-    #                          gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer,user_args=user_args)
+    scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
+                             checkpoint_iterations, checkpoint, debug_from,
+                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer,user_args=user_args)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, "fine", tb_writer, opt.iterations,timer,user_args=user_args)
@@ -267,7 +278,7 @@ def prepare_output_and_logger(expname):
         print("Tensorboard not available: not logging progress")
     return tb_writer
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs, stage):
+def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs, stage,user_args=None):
     if tb_writer:
         tb_writer.add_scalar(f'{stage}/train_loss_patches/l1_loss', Ll1.item(), iteration)
         tb_writer.add_scalar(f'{stage}/train_loss_patchestotal_loss', loss.item(), iteration)
@@ -294,7 +305,12 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
                 psnr_test /= len(config['cameras'])
-                l1_test /= len(config['cameras'])          
+                l1_test /= len(config['cameras'])      
+
+                if user_args.use_wandb and config['name'] == "test":
+                    wandb.log({"test/psnr":psnr_test,"test/loss":l1_test},step=iteration)
+
+
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config['name'], l1_test, psnr_test))
                 if tb_writer:
                     tb_writer.add_scalar(stage + "/"+config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
@@ -340,12 +356,19 @@ if __name__ == "__main__":
     parser.add_argument("--use_wandb",action="store_true",default=False)
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
+    parser.add_argument("--no_shadow",action="store_true",default=True)
     
     
     # regularization
     parser.add_argument("--lambda_momentum",default=0.0,type=float)
     
     args = parser.parse_args(sys.argv[1:])
+
+    if args.use_wandb:
+        wandb.init(project=args.wandb_project,name=args.wandb_name)
+        wandb.config.update(args)
+
+
     args.save_iterations.append(args.iterations)
     if args.configs:
         import mmcv

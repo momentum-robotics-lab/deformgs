@@ -23,14 +23,18 @@ from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args, ModelHiddenParams
 from gaussian_renderer import GaussianModel
 from time import time
-to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
+
+tonumpy = lambda x : x.cpu().numpy()
+to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
+
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
-    render_images = []
+    video_imgs = []
+    save_imgs = []
     gt_list = []
     render_list = []
     
@@ -51,9 +55,11 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         rendering = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)["render"]
         # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
-        render_images.append(to8b(rendering).transpose(1,2,0))
+        video_imgs.append(to8(tonumpy(rendering)).transpose(1,2,0))
+        save_imgs.append(torch.tensor(tonumpy(rendering),device="cpu"))
+        # print device of render_images, cuda or cpu
         # print(to8b(rendering).shape)
-        render_list.append(rendering)
+        # render_list.append(rendering)
         if name in ["train", "test"]:
             gt = view.original_image[0:3, :, :]
             # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
@@ -68,12 +74,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             count+=1
     count = 0
     print("writing rendering images.")
-    if len(render_list) != 0:
-        for image in tqdm(render_list):
+    if len(save_imgs) != 0:
+        for image in tqdm(save_imgs):
             torchvision.utils.save_image(image, os.path.join(render_path, '{0:05d}'.format(count) + ".png"))
             count +=1
     
-    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), render_images, fps=30, quality=8)
+    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), video_imgs, fps=30, quality=8)
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool,log_deform=False,user_args=None):
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)

@@ -16,7 +16,7 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
     """
     Render the scene. 
     
@@ -113,6 +113,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
     shs = None
     colors_precomp = None
+
+    if no_shadow:
+        shadow_scalars = None
+        print('no shadow')
     if override_color is None:
         if shadow_scalars is not None: # we compute colors in python to multiply with our shadow scalars
             shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
@@ -142,6 +146,13 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations_final,
         cov3D_precomp = cov3D_precomp)
 
+
+    shadows_mean = None
+    shadows_std = None
+
+    if shadow_scalars is not None:
+        shadows_mean = torch.mean(shadow_scalars)
+        shadows_std = torch.std(shadow_scalars)
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
@@ -150,5 +161,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "radii": radii,
             "depth":depth,
             "means3D_deform":means3D_deform,
+            "shadows_mean":shadows_mean,    
+            "shadows_std":shadows_std,
             }
 
