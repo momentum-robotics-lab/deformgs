@@ -125,8 +125,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
 
-            if user_args.lambda_momentum > 0 and stage=="fine" :
-                all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
+            all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
 
         shadows_mean = render_pkg["shadows_mean"]
         if user_args.use_wandb and shadows_mean is not None:
@@ -356,14 +355,14 @@ if __name__ == "__main__":
     parser.add_argument("--use_wandb",action="store_true",default=False)
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
-    parser.add_argument("--no_shadow",action="store_true",default=True)
+    parser.add_argument("--no_shadow",action="store_true")
     
     
     # regularization
     parser.add_argument("--lambda_momentum",default=0.0,type=float)
     
     args = parser.parse_args(sys.argv[1:])
-
+    
     if args.use_wandb:
         wandb.init(project=args.wandb_project,name=args.wandb_name)
         wandb.config.update(args)

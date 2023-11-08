@@ -23,9 +23,31 @@ from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args, ModelHiddenParams
 from gaussian_renderer import GaussianModel
 from time import time
+import glob 
 
 tonumpy = lambda x : x.cpu().numpy()
 to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
+
+def merge_deform_logs(folder):
+    npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
+    # sort based on the float number in the file name
+    npz_files.sort(key=lambda f: float(''.join(filter(str.isdigit, f))))
+    times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
+    trajs = []
+    for npz_file in npz_files:
+        deforms_data = np.load(npz_file)
+        xyzs = deforms_data['means3D']
+        xyzs_deformed = deforms_data['means3D_deform']
+        trajs.append(xyzs_deformed)
+
+
+    trajs = np.stack(trajs)
+    
+    np.savez(os.path.join(folder,'all_trajs.npz'),traj=trajs)
+    print("saved all trajs to {}".format(os.path.join(folder,'all_trajs.npz')))
+    print("shape of all trajs: {}".format(trajs.shape))
+    
+
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -91,9 +113,17 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
         if not skip_train:
             render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform)
         if not skip_test:
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform)
+            log_folder = os.path.join(args.model_path, "test", "ours_{}".format(scene.loaded_iter))
+            delete_previous_deform_logs(log_folder)
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform) 
+            merge_deform_logs(log_folder)           
         if not skip_video:
             render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform)
+ 
+def delete_previous_deform_logs(folder):
+    npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
+    for npz_file in npz_files:
+        os.remove(npz_file)
             
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -122,3 +152,4 @@ if __name__ == "__main__":
     safe_state(args.quiet)
 
     render_sets(model.extract(args), hyperparam.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, args.skip_video,log_deform=args.log_deform,user_args=args)
+    
