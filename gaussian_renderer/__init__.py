@@ -15,6 +15,7 @@ import numpy as np
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
+import matplotlib.pyplot as plt
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
     """
@@ -35,6 +36,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
     tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
         
+    
+
+
     raster_settings = GaussianRasterizationSettings(
         image_height=int(viewpoint_camera.image_height),
         image_width=int(viewpoint_camera.image_width),
@@ -88,6 +92,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     with torch.no_grad():
         pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
 
+ 
     
     means3D_final = torch.zeros_like(means3D)
     rotations_final = torch.zeros_like(rotations)
@@ -143,6 +148,20 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations_final,
         cov3D_precomp = cov3D_precomp)
 
+    # projecting to cam frame for later use in optic flow
+    means_deform_h = torch.cat([means3D_deform,torch.ones_like(means3D_deform[:,0:1])],dim=1).T 
+    cam_transform = viewpoint_camera.full_proj_transform.to(means_deform_h.device).T
+
+    projections = cam_transform.matmul(means_deform_h)
+    projections = projections/projections[3,:]
+
+    projections = projections[:2].T
+    H, W = int(viewpoint_camera.image_height), int(viewpoint_camera.image_width)
+
+    projections_cam = torch.zeros_like(projections).to(projections.device)
+    projections_cam[:,0] = ((projections[:,0] + 1.0) * W - 1.0) * 0.5
+    projections_cam[:,1] = ((projections[:,1] + 1.0) * H - 1.0) * 0.5
+
 
     shadows_mean = None
     shadows_std = None
@@ -160,5 +179,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "means3D_deform":means3D_deform,
             "shadows_mean":shadows_mean,    
             "shadows_std":shadows_std,
+            "projections_cam":projections_cam,
             }
 
