@@ -116,7 +116,8 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
             log_folder = os.path.join(args.model_path, "test", "ours_{}".format(scene.loaded_iter))
             delete_previous_deform_logs(log_folder)
             render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform) 
-            merge_deform_logs(log_folder)           
+            if user_args.log_deform:
+                merge_deform_logs(log_folder)           
         if not skip_video:
             render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform)
  
@@ -138,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip_video", action="store_true")
     parser.add_argument("--configs", type=str)
     parser.add_argument("--time_skip",type=int,default=None)
+    parser.add_argument("--view_skip",default=None,type=int)
     parser.add_argument("--log_deform", action="store_true")
     parser.add_argument("--three_steps_batch",type=bool,default=False)
 

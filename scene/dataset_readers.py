@@ -257,7 +257,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
                             image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
                             time = time,time_id=None,view_id=None))
     return cam_infos
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None):
     cam_infos = []
 
     with open(os.path.join(path, transformsfile)) as json_file:
@@ -290,6 +290,9 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 # format is r_viewid_timeid
                 view_id = int(file_name.split("_")[1])
                 time_id = int(file_name.split("_")[2])
+                if view_skip is not None:
+                    if view_id % view_skip != 0:
+                        continue
 
                 cam_name = os.path.join(path, file_path)
                 time = mapper[frame["time"]]
@@ -335,13 +338,13 @@ def read_timeline(path):
         timestamp_mapper[time] = time/max_time_float
 
     return timestamp_mapper, max_time_float
-def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None):
+def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
     # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip)
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip)
     print("Generating Video Transforms")
     video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
     if not eval:
