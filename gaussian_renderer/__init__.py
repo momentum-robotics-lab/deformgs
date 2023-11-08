@@ -162,7 +162,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     projections_cam[:,0] = ((projections[:,0] + 1.0) * W - 1.0) * 0.5
     projections_cam[:,1] = ((projections[:,1] + 1.0) * H - 1.0) * 0.5
 
-
     shadows_mean = None
     shadows_std = None
 
@@ -179,6 +178,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "means3D_deform":means3D_deform,
             "shadows_mean":shadows_mean,    
             "shadows_std":shadows_std,
-            "projections_cam":projections_cam,
+            "projections":projections_cam,
             }
 

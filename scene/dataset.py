@@ -14,6 +14,9 @@ class FourDGSdataset(Dataset):
     ):
         self.dataset = dataset
         self.args = args
+        self.viewpoint_ids = np.unique([data.view_id for data in dataset])
+        self.time_ids = np.unique([data.time_id for data in dataset])
+
     def __getitem__(self, index):
 
         try:
@@ -29,8 +32,12 @@ class FourDGSdataset(Dataset):
             FovX = caminfo.FovX
             FovY = caminfo.FovY
             time = caminfo.time
+        
+        view_id = self.viewpoint_ids[index]
+        time_id = self.time_ids[index]
+
         return Camera(colmap_id=index,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                          image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time)
+                          image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,view_id=view_id,time_id=time_id)
     def __len__(self):
         
         return len(self.dataset)

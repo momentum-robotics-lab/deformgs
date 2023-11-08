@@ -24,6 +24,7 @@ from arguments import ModelParams, PipelineParams, get_combined_args, ModelHidde
 from gaussian_renderer import GaussianModel
 from time import time
 import glob 
+import matplotlib.pyplot as plt
 
 tonumpy = lambda x : x.cpu().numpy()
 to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
@@ -49,7 +50,7 @@ def merge_deform_logs(folder):
     
 
 
-def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False):
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
@@ -62,6 +63,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     
     all_times = [view.time for view in views]
     todo_times = np.unique(all_times)
+    n_times = len(todo_times)
+
+    prev_projections = None 
+    current_projections = None 
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
@@ -75,10 +80,23 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
 
-        rendering = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)["render"]
+        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)
+        rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+        print(rendering.shape)
+        if args.show_flow:
+            current_projections = render_pkg["projections"].to("cpu").numpy()
+            for i in range(current_projections.shape[0]):
+                rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [0,0,255]
+            prev_projections = current_projections
+            # plt.imshow(rendering)
+            # plt.scatter(current_projections[:,0],current_projections[:,1])
+            # plt.savefig('test.png')
+            # exit()
+
+        rendering = rendering.transpose(2,0,1)
         # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
-        video_imgs.append(to8(tonumpy(rendering)).transpose(1,2,0))
-        save_imgs.append(torch.tensor(tonumpy(rendering),device="cpu"))
+        video_imgs.append(to8((rendering)).transpose(1,2,0))
+        save_imgs.append(torch.tensor((rendering),device="cpu"))
         # print device of render_images, cuda or cpu
         # print(to8b(rendering).shape)
         # render_list.append(rendering)
@@ -111,15 +129,15 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform)
+            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args)
         if not skip_test:
             log_folder = os.path.join(args.model_path, "test", "ours_{}".format(scene.loaded_iter))
             delete_previous_deform_logs(log_folder)
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform) 
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args) 
             if user_args.log_deform:
                 merge_deform_logs(log_folder)           
         if not skip_video:
-            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform)
+            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform,args=user_args)
  
 def delete_previous_deform_logs(folder):
     npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
@@ -142,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("--view_skip",default=None,type=int)
     parser.add_argument("--log_deform", action="store_true")
     parser.add_argument("--three_steps_batch",type=bool,default=False)
+    parser.add_argument("--show_flow",action="store_true")
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)
