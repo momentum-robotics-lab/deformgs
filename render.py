@@ -86,7 +86,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
 
-        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)
+        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
@@ -179,6 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--three_steps_batch",type=bool,default=False)
     parser.add_argument("--show_flow",action="store_true")
     parser.add_argument("--flow_skip",type=int,default=1)
+    parser.add_argument("--no_shadow",action="store_true")
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)

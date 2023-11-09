@@ -18,7 +18,7 @@ class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", time = 0,
-                 view_id = None, time_id = None
+                 view_id = None, time_id = None, flow = None
                  ):
         super(Camera, self).__init__()
 
@@ -32,7 +32,8 @@ class Camera(nn.Module):
         self.time = time
         self.view_id = view_id
         self.time_id = time_id
-        
+        self.flow = flow
+
         try:
             self.data_device = torch.device(data_device)
         except Exception as e:

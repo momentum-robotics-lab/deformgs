@@ -118,7 +118,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     if no_shadow:
         shadow_scalars = None
-        print('no shadow')
     if override_color is None:
         if shadow_scalars is not None: # we compute colors in python to multiply with our shadow scalars
             shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)

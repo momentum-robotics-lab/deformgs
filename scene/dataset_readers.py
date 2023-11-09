@@ -42,6 +42,7 @@ class CameraInfo(NamedTuple):
     time : float
     view_id: int 
     time_id: int
+    flow: np.array = None
    
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -257,9 +258,16 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
                             image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
                             time = time,time_id=None,view_id=None))
     return cam_infos
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train'):
     cam_infos = []
     
+    flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.npz")
+    data = np.load(flow_file)
+    print("Loading optic flow..")
+    all_flow = data['flow']
+    img_paths_flow = data['img_paths']
+    print("Finished loading optic flow..")
+
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         fovx = contents["camera_angle_x"]
@@ -295,6 +303,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     if view_id % view_skip != 0:
                         continue
                 
+
+                # check if file_path is in img_paths
+                if file_path in img_paths_flow:
+                    flow = all_flow[img_paths_flow == file_path]
+                
                 cam_name = os.path.join(path, file_path)
                 time = mapper[frame["time"]]
                 matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
@@ -320,8 +333,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time,view_id=view_id,time_id=time_id))
- 
+                                time = time,view_id=view_id,time_id=time_id,flow=flow))
     return cam_infos
 def read_timeline(path):
     with open(os.path.join(path, "transforms_train.json")) as json_file:
@@ -343,9 +355,9 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
     # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train')
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test')
     print("Generating Video Transforms")
     video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
     if not eval:

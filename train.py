@@ -113,6 +113,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         visibility_filter_list = []
         viewspace_point_tensor_list = []
         all_means_3D_deform = []
+        all_projections = []
         
         for viewpoint_cam in viewpoint_cams:
             
@@ -126,6 +127,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             viewspace_point_tensor_list.append(viewspace_point_tensor)
 
             all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
+            all_projections.append(render_pkg["projections"][None,:,:])
+
+        all_projections = torch.cat(all_projections,0)
+        flow_0 = all_projections[1]
 
         shadows_mean = render_pkg["shadows_mean"]
         if user_args.use_wandb and shadows_mean is not None:
@@ -295,7 +300,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 l1_test = 0.0
                 psnr_test = 0.0
                 for idx, viewpoint in enumerate(config['cameras']):
-                    image = torch.clamp(renderFunc(viewpoint, scene.gaussians,stage=stage, *renderArgs)["render"], 0.0, 1.0)
+                    image = torch.clamp(renderFunc(viewpoint, scene.gaussians,stage=stage, *renderArgs,no_shadow=user_args.no_shadow)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
                     if tb_writer and (idx < 5):
                         tb_writer.add_images(stage + "/"+config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)

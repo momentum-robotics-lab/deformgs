@@ -19,25 +19,26 @@ class FourDGSdataset(Dataset):
         self.time_ids = [data.time_id for data in dataset]
 
     def __getitem__(self, index):
-        try:
-            image, w2c, time = self.dataset[index]
-            R,T = w2c
-            FovX = focal2fov(self.dataset.focal[0], image.shape[2])
-            FovY = focal2fov(self.dataset.focal[0], image.shape[1])
-        except:
-            caminfo = self.dataset[index]
-            image = caminfo.image
-            R = caminfo.R
-            T = caminfo.T
-            FovX = caminfo.FovX
-            FovY = caminfo.FovY
-            time = caminfo.time
+        # try:
+        #     image, w2c, time = self.dataset[index]
+        #     R,T = w2c
+        #     FovX = focal2fov(self.dataset.focal[0], image.shape[2])
+        #     FovY = focal2fov(self.dataset.focal[0], image.shape[1])
+        # except:
+        caminfo = self.dataset[index]
+        image = caminfo.image
+        R = caminfo.R
+        T = caminfo.T
+        FovX = caminfo.FovX
+        FovY = caminfo.FovY
+        time = caminfo.time
+        flow = caminfo.flow
         
         view_id = self.viewpoint_ids[index]
         time_id = self.time_ids[index]
 
         return Camera(colmap_id=index,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                          image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,view_id=view_id,time_id=time_id)
+                          image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,view_id=view_id,time_id=time_id,flow=flow)
     def __len__(self):
         
         return len(self.dataset)
