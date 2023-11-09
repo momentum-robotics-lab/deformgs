@@ -130,7 +130,57 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             all_projections.append(render_pkg["projections"][None,:,:])
 
         all_projections = torch.cat(all_projections,0)
-        flow_0 = all_projections[1]
+
+        ## flow frame i-1 
+        flow_0 = all_projections[1] - all_projections[0]
+        # mask s.t. only visible points are used for flow
+        mask_visibility = visibility_filter_list[0].squeeze(0) & visibility_filter_list[1].squeeze(0)
+        # mask s.t. only points that are in [H,W] are used for flow
+        mask_in_image = (all_projections[0,:,0] >= 0) & (all_projections[0,:,0] < viewpoint_cams[0].image_height) & (all_projections[0,:,1] >= 0) & \
+        (all_projections[0,:,1] < viewpoint_cams[0].image_width)
+        print(mask_in_image.shape)
+        print(mask_visibility.shape)
+        
+        mask = mask_visibility & mask_in_image
+        flow_0 = flow_0[mask]
+        projections_0 = all_projections[0][mask]
+        raft_flow_0 = torch.tensor(viewpoint_cams[0].flow[0],device="cuda")
+        raft_flow_0_indexed = raft_flow_0[:,projections_0[:,0].long(),projections_0[:,1].long()].T
+
+
+        print(raft_flow_0_indexed.shape)
+        print(flow_0.shape)
+        print(all_projections[0,:,1].max())
+        print(projections_0.max())
+        exit()
+
+        # ## flow frame i
+        # flow_1 = all_projections[2] - all_projections[1]
+        # # mask s.t. only visible points are used for flow
+        # mask_visibility = visibility_filter_list[1].squeeze(0) & visibility_filter_list[2].squeeze(0)
+        # # mask s.t. only points that are in [H,W] are used for flow
+        # mask_in_image = (all_projections[:,1] >= 0) & (all_projections[:,1] < viewpoint_cams[1].image_width) & (all_projections[:,2] >= 0) & \
+        # (all_projections[:,2] < viewpoint_cams[2].image_height)
+
+        # mask = mask_visibility & mask_in_image
+        # flow_1 = flow_1[mask]
+
+        
+        # # raft_flow_0 shape 2 x H x W 
+        # # all_projections[0] N x 2 
+        # # index raft_flow_0 with all_projections[0]
+
+
+
+        
+
+
+        print(raft_flow_0_indexed.shape)
+        print(flow_0.shape)
+        print(raft_flow_0_indexed[:3])
+        raft_flow_1 = viewpoint_cams[1].flow
+
+        exit()
 
         shadows_mean = render_pkg["shadows_mean"]
         if user_args.use_wandb and shadows_mean is not None:

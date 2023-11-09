@@ -88,21 +88,22 @@ class MDNerfDataset(Dataset):
         
 
     def get_one_item(self, view_id, time_id):
-        try:
-            image, w2c, time = self.ordered_data[view_id,time_id]
-            R,T = w2c
-            FovX = focal2fov(self.dataset.focal[0], image.shape[2])
-            FovY = focal2fov(self.dataset.focal[0], image.shape[1])
-        except:
-            caminfo = self.ordered_data[view_id,time_id]
-            image = caminfo.image
-            R = caminfo.R
-            T = caminfo.T
-            FovX = caminfo.FovX
-            FovY = caminfo.FovY
-            time = caminfo.time
+        # try:
+        #     image, w2c, time = self.ordered_data[view_id,time_id]
+        #     R,T = w2c
+        #     FovX = focal2fov(self.dataset.focal[0], image.shape[2])
+        #     FovY = focal2fov(self.dataset.focal[0], image.shape[1])
+        # except:
+        caminfo = self.ordered_data[view_id,time_id]
+        image = caminfo.image
+        R = caminfo.R
+        T = caminfo.T
+        FovX = caminfo.FovX
+        FovY = caminfo.FovY
+        time = caminfo.time
+        flow = caminfo.flow
         return Camera(colmap_id=view_id,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                          image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time)
+                          image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time,flow=flow)
     def __len__(self):
         
         return self.n_viewpoints

@@ -67,12 +67,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
     prev_projections = None 
     current_projections = None 
+    prev_visible = None
 
     print(len(views))
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
     arrow_tickness = 1
+    raddii_threshold = 10
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
@@ -85,26 +87,38 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
-
+        
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
+            current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
+            (current_projections[:,1] < view.image_width)
+            
+            current_visible = render_pkg["radii"].to("cpu").numpy() > raddii_threshold
+            current_mask = current_visible & current_mask_in_image          
             for i in range(current_projections.shape[0])[::args.flow_skip]:
-                rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [0,255,0]
+                if current_mask[i]:
+                    rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [0,255,0]
 
             if view_id != view.view_id:
                 prev_projections = None
             else:
                 if prev_projections is not None:
                     # draw flow at previous frame
+                    prev_mask_in_image = (prev_projections[:,0] >= 0) & (prev_projections[:,0] < view.image_height) & (prev_projections[:,1] >= 0) & \
+                    (prev_projections[:,1] < view.image_width)
+                    prev_mask = prev_visible & prev_mask_in_image
+                    
                     prev_frame = np.ascontiguousarray(render_list[-1])
                     for i in range(current_projections.shape[0])[::args.flow_skip]:
                         # draw arrow from prev_projections to current_projections
-                        prev_frame = cv2.arrowedLine(prev_frame,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),arrow_color,arrow_tickness)
+                        if prev_mask[i] and current_mask[i]:
+                            prev_frame = cv2.arrowedLine(prev_frame,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),arrow_color,arrow_tickness)
 
                     render_list[-1] = prev_frame
                 prev_projections = current_projections
+                prev_visible = current_visible
             
             view_id = view.view_id
             
