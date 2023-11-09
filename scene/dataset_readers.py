@@ -259,7 +259,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
     return cam_infos
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None):
     cam_infos = []
-
+    
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         fovx = contents["camera_angle_x"]

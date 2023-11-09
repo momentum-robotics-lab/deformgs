@@ -356,6 +356,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
     parser.add_argument("--no_shadow",action="store_true")
+    parser.add_argument("--view_skip",default=1,type=int)
     
     
     # regularization

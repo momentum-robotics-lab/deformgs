@@ -19,7 +19,6 @@ class FourDGSdataset(Dataset):
         self.time_ids = [data.time_id for data in dataset]
 
     def __getitem__(self, index):
-        print(index)
         try:
             image, w2c, time = self.dataset[index]
             R,T = w2c
