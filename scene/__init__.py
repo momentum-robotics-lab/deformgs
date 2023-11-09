@@ -91,18 +91,23 @@ class Scene:
             # self.video_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.video_cameras, resolution_scale, args)
         
         if user_args.three_steps_batch:
-            print("Loading Training Cameras")
+            print("Loading Training Cameras, MDNeRF")
             self.train_camera = MDNerfDataset(scene_info.train_cameras, args)
-            print("Loading Test Cameras")
+            
+            print("Loading Test Cameras, MDNeRF")
             self.test_camera = MDNerfDataset(scene_info.test_cameras, args)
-            print("Loading Video Cameras")
+            
+            
         else:
+            print("Loading Training Cameras, 4DGS")
             self.train_camera = FourDGSdataset(scene_info.train_cameras, args)
+            print("Loading Test Cameras, 4DGS")
             self.test_camera = FourDGSdataset(scene_info.test_cameras, args)
         
         self.train_camera_individual = FourDGSdataset(scene_info.train_cameras, args)
         self.test_camera_individual = FourDGSdataset(scene_info.test_cameras, args)
         
+        print("Loading Video Cameras")
         self.video_camera = cameraList_from_camInfos(scene_info.video_cameras,-1,args)
         xyz_max = scene_info.point_cloud.points.max(axis=0)
         xyz_min = scene_info.point_cloud.points.min(axis=0)

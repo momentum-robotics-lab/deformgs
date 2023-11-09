@@ -68,6 +68,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     prev_projections = None 
     current_projections = None 
 
+    print(len(views))
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         log_deform_path = None
@@ -82,28 +83,24 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
-        print(rendering.shape)
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
             for i in range(current_projections.shape[0]):
-                rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [0,0,255]
+                rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [255,0,0]
             prev_projections = current_projections
-            # plt.imshow(rendering)
-            # plt.scatter(current_projections[:,0],current_projections[:,1])
-            # plt.savefig('test.png')
-            # exit()
+        
+        render_list.append(rendering)
+            
 
-        rendering = rendering.transpose(2,0,1)
-        # torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
-        video_imgs.append(to8((rendering)).transpose(1,2,0))
-        save_imgs.append(torch.tensor((rendering),device="cpu"))
-        # print device of render_images, cuda or cpu
-        # print(to8b(rendering).shape)
-        # render_list.append(rendering)
         if name in ["train", "test"]:
             gt = view.original_image[0:3, :, :]
             # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
             gt_list.append(gt)
+
+    video_imgs = [to8(img) for img in render_list]
+    save_imgs = [torch.tensor((img.transpose(2,0,1)),device="cpu") for img in render_list ]
+
+
     time2=time()
     print("FPS:",(len(views)-1)/(time2-time1))
     count = 0

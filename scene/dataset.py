@@ -6,6 +6,7 @@ from utils.graphics_utils import fov2focal, focal2fov
 import torch
 from utils.camera_utils import loadCam
 from utils.graphics_utils import focal2fov
+
 class FourDGSdataset(Dataset):
     def __init__(
         self,
@@ -14,11 +15,11 @@ class FourDGSdataset(Dataset):
     ):
         self.dataset = dataset
         self.args = args
-        self.viewpoint_ids = np.unique([data.view_id for data in dataset])
-        self.time_ids = np.unique([data.time_id for data in dataset])
+        self.viewpoint_ids = [data.view_id for data in dataset]
+        self.time_ids = [data.time_id for data in dataset]
 
     def __getitem__(self, index):
-
+        print(index)
         try:
             image, w2c, time = self.dataset[index]
             R,T = w2c
