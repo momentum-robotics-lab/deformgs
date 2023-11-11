@@ -4,6 +4,19 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import glob 
 import os
+import open3d as o3d 
+
+def o3d_knn(pts, num_knn):
+    indices = []
+    sq_dists = []
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.ascontiguousarray(pts, np.float64))
+    pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+    for p in pcd.points:
+        [_, i, d] = pcd_tree.search_knn_vector_3d(p, num_knn + 1)
+        indices.append(i[1:])
+        sq_dists.append(d[1:])
+    return np.sqrt(np.array(sq_dists)), np.array(indices)
 
 def parse_args():
     parser = ArgumentParser()
@@ -96,6 +109,10 @@ def main():
         deforms_data = np.load(npz_file)
         xyzs = deforms_data['means3D']
         xyzs_deformed = deforms_data['means3D_deform']
+        
+
+        o3d_dists , _ = o3d_knn(xyzs_deformed, 3)
+        
         trajs.append(xyzs_deformed)
         # if args.z_max is not None:
         #     xyzs = xyzs[xyzs_deformed[:,2] < args.z_max]

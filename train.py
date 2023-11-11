@@ -25,6 +25,7 @@ from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHiddenParams
 from torch.utils.data import DataLoader
 from utils.timer import Timer
+from utils.external import *
 import wandb 
 import pytorch3d.transforms as transforms
  
@@ -41,17 +42,6 @@ except ImportError:
     TENSORBOARD_FOUND = False
 
 
-def o3d_knn(pts, num_knn):
-    indices = []
-    sq_dists = []
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(np.ascontiguousarray(pts, np.float64))
-    pcd_tree = o3d.geometry.KDTreeFlann(pcd)
-    for p in pcd.points:
-        [_, i, d] = pcd_tree.search_knn_vector_3d(p, num_knn + 1)
-        indices.append(i[1:])
-        sq_dists.append(d[1:])
-    return np.sqrt(np.array(sq_dists)), np.array(indices)
 
 
 
@@ -134,6 +124,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_means_3D_deform = []
         all_projections = []
         all_rotations = []
+        all_opacities = []
         
         for viewpoint_cam in viewpoint_cams:
             
@@ -149,9 +140,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
             all_projections.append(render_pkg["projections"][None,:,:])
             all_rotations.append(render_pkg["rotations"][None,:,:])
+            all_opacities.append(render_pkg["opacities"][None,:])
 
         all_projections = torch.cat(all_projections,0)
         all_rotations = torch.cat(all_rotations,0)
+        all_opacities = torch.cat(all_opacities,0)
 
 
 
@@ -197,14 +190,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
                 o3d_knn_dists, o3d_knn_indices = o3d_knn(t_0_pts, 3)
                 o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                
+                if args.use_wandb and stage == "fine":
+                    wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
                 print("updating knn's")
 
             ## ISOMETRIC LOSS
             all_l_iso = []
 
-            all_rigidity = []
             prev_rotations = None
-            prev_i_j_vector = None
+            prev_offsets = None
             all_l_rigid = []
             for i in range(3):
                 # o3d_knn_indices : [N,3], 3 nearest neighbors
@@ -217,9 +212,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 knn_points = knn_points.reshape(-1,3) # N x 3
                 means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,3,1).reshape(-1,3) # N x 3
                 
-                i_j_vector = knn_points - means_3D_deform_repeated
-                knn_dists = torch.linalg.norm(i_j_vector,dim=-1)
-                
+                curr_offsets = knn_points - means_3D_deform_repeated
+                knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
+                if args.use_wandb and stage == "fine":
+                    wandb.log({"train/knn_dists":knn_dists.median()},step=iteration)
                 # print(knn_dists.shape)
                 # exit()
                 
@@ -228,24 +224,23 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 all_l_iso.append(l_iso_tmp)
 
                 rotations = all_rotations[i,:,:]
-                knn_rotations = rotations[o3d_knn_indices]
-                knn_rotation_matrices = transforms.quaternion_to_matrix(knn_rotations)
-                knn_rotation_matrices = knn_rotation_matrices.reshape(-1,3,3) # N x 3 x 3
-
+                knn_rotations = rotations[o3d_knn_indices].reshape((-1,4))
+                knn_rotations_inv = quat_inv(knn_rotations)
                 if prev_rotations is not None:
                     # compute rigidity loss
                     # knn_rotation_matrices : [N,3,3], last two dimensions are rotation matrices
-                    l_rigid_tmp = prev_i_j_vector
-                    knn_rotations_inv = knn_rotation_matrices.permute(0,2,1) # R_inv = R.T - N x 3 x 3
-                    relative_rotations = torch.bmm(knn_rotations_inv,prev_rotations) # N x 3 x 3
-                    l_rigid_tmp -= torch.bmm(relative_rotations,i_j_vector.unsqueeze(-1)).squeeze(-1) # N x 3
-                    
-                    l_rigid_tmp = torch.linalg.norm(l_rigid_tmp,dim=-1).mean()
+                    rel_rot = quat_mult(knn_rotations_inv,prev_rotations)
+                    rot = build_rotation(rel_rot)
+
+                    curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
+
+                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, all_opacities[i,:].unsqueeze(-1))
+                   
                     all_l_rigid.append(l_rigid_tmp)
-               
+                    
                 
-                prev_rotations = knn_rotation_matrices.clone()
-                prev_i_j_vector = i_j_vector.clone()
+                prev_rotations = knn_rotations.clone()
+                prev_offsets = curr_offsets.clone()
 
                 # print(knn_rotations.shape)
                 # exit()
@@ -259,8 +254,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 wandb.log({"train/l_rigid":l_rigid},step=iteration)
             
             
-            
-
+        
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
             loss += user_args.lambda_momentum * l_reg.mean()

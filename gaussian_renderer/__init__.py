@@ -28,8 +28,11 @@ def get_pos_t0(pc:GaussianModel):
     t_0_points, _, _, _, _ =  pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
                                                                          time[deformation_point])  
+    means3D_final = torch.zeros_like(means3D)
+    means3D_final[deformation_point] =  t_0_points
+    means3D_final[~deformation_point] = means3D[~deformation_point]
     
-    return t_0_points
+    return means3D_final
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
     """
@@ -103,8 +106,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
         scales_deform, opacity_deform = scales, opacity 
 
-        if log_deform_path is not None:
-            np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_deform.cpu().numpy())
+        
 
 
     # print(time.max())
@@ -126,6 +128,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     scales_final[~deformation_point] = scales[~deformation_point]
     opacity_final[~deformation_point] = opacity[~deformation_point]
 
+    
+    if log_deform_path is not None:
+            np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_final.cpu().numpy())
+            
     scales_final = pc.scaling_activation(scales_final)
     rotations_final = pc.rotation_activation(rotations_final)
     opacity = pc.opacity_activation(opacity)
@@ -193,10 +199,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "visibility_filter" : radii > 0,
             "radii": radii,
             "depth":depth,
-            "means3D_deform":means3D_deform,
+            "means3D_deform":means3D_final,
             "shadows_mean":shadows_mean,    
             "shadows_std":shadows_std,
             "projections":projections_cam,
             "rotations": rotations_deform,
+            "opacities": opacity_final,
             }
 
