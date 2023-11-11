@@ -12,6 +12,7 @@ def o3d_knn(pts, num_knn):
         [_, i, d] = pcd_tree.search_knn_vector_3d(p, num_knn + 1)
         indices.append(i[1:])
         sq_dists.append(d[1:])
+
     return np.sqrt(np.array(sq_dists)), np.array(indices)
 
 def build_rotation(q):

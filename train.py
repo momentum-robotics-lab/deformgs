@@ -211,7 +211,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 knn_points = means_3D_deform[o3d_knn_indices]
                 knn_points = knn_points.reshape(-1,3) # N x 3
                 means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,3,1).reshape(-1,3) # N x 3
-                
                 curr_offsets = knn_points - means_3D_deform_repeated
                 knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
                 if args.use_wandb and stage == "fine":
@@ -233,7 +232,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     rot = build_rotation(rel_rot)
 
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
-                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, all_opacities[i,:].repeat(3,1).flatten())
+                    weights = torch.ones((curr_offset_in_prev_coord.shape[0]),device="cuda")
+                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, weights)
                     all_l_rigid.append(l_rigid_tmp)
                     
                 
