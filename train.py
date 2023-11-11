@@ -233,9 +233,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     rot = build_rotation(rel_rot)
 
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
-
-                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, all_opacities[i,:].unsqueeze(-1))
-                   
+                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, all_opacities[i,:].repeat(3,1).flatten())
                     all_l_rigid.append(l_rigid_tmp)
                     
                 
