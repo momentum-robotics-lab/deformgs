@@ -17,6 +17,20 @@ from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 import matplotlib.pyplot as plt
 
+
+def get_pos_t0(pc:GaussianModel):
+    means3D = pc.get_xyz
+    scales = pc._scaling
+    rotations = pc._rotation
+    opacity = pc._opacity
+    time = torch.tensor(0.0).to(means3D.device).repeat(means3D.shape[0],1)
+    deformation_point = pc._deformation_table
+    t_0_points, _, _, _, _ =  pc._deformation(means3D[deformation_point], scales[deformation_point], 
+                                                                         rotations[deformation_point], opacity[deformation_point],
+                                                                         time[deformation_point])  
+    
+    return t_0_points
+
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
     """
     Render the scene. 
@@ -80,10 +94,15 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     if stage == "coarse" :
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
     else:
-        means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
+        # means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
+        #                                                                  rotations[deformation_point], opacity[deformation_point],
+        #                                                                  time[deformation_point])
+        means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
-                                                                         time[deformation_point])
-        
+                                                                         time[deformation_point])        
+
+        scales_deform, opacity_deform = scales, opacity 
+
         if log_deform_path is not None:
             np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_deform.cpu().numpy())
 
@@ -178,5 +197,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "shadows_mean":shadows_mean,    
             "shadows_std":shadows_std,
             "projections":projections_cam,
+            "rotations": rotations_deform,
             }
 

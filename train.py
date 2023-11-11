@@ -14,7 +14,7 @@ import os
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
-from gaussian_renderer import render, network_gui
+from gaussian_renderer import render, network_gui, get_pos_t0
 import sys
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
@@ -26,8 +26,10 @@ from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHidd
 from torch.utils.data import DataLoader
 from utils.timer import Timer
 import wandb 
-
+import pytorch3d.transforms as transforms
+ 
 import lpips
+import open3d as o3d
 from utils.scene_utils import render_training_image
 from time import time
 to8b = lambda x : (255*np.clip(x.cpu().numpy(),0,1)).astype(np.uint8)
@@ -37,6 +39,22 @@ try:
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
+
+
+def o3d_knn(pts, num_knn):
+    indices = []
+    sq_dists = []
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.ascontiguousarray(pts, np.float64))
+    pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+    for p in pcd.points:
+        [_, i, d] = pcd_tree.search_knn_vector_3d(p, num_knn + 1)
+        indices.append(i[1:])
+        sq_dists.append(d[1:])
+    return np.sqrt(np.array(sq_dists)), np.array(indices)
+
+
+
 def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations, 
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, stage, tb_writer, train_iter,timer,user_args=None):
@@ -63,6 +81,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     first_iter += 1
     lpips_model = lpips.LPIPS(net="alex").cuda()
     video_cams = scene.getVideoCameras()
+    o3d_knn_dists, o3d_knn_indices = None, None
     for iteration in range(first_iter, final_iter+1):        
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -114,6 +133,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         viewspace_point_tensor_list = []
         all_means_3D_deform = []
         all_projections = []
+        all_rotations = []
         
         for viewpoint_cam in viewpoint_cams:
             
@@ -128,62 +148,17 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
             all_projections.append(render_pkg["projections"][None,:,:])
+            all_rotations.append(render_pkg["rotations"][None,:,:])
 
         all_projections = torch.cat(all_projections,0)
-
-        ## flow frame i-1 
-        flow_0 = all_projections[1] - all_projections[0]
-        # mask s.t. only visible points are used for flow
-        mask_visibility = visibility_filter_list[0].squeeze(0) & visibility_filter_list[1].squeeze(0)
-        # mask s.t. only points that are in [H,W] are used for flow
-        mask_in_image = (all_projections[0,:,0] >= 0) & (all_projections[0,:,0] < viewpoint_cams[0].image_height) & (all_projections[0,:,1] >= 0) & \
-        (all_projections[0,:,1] < viewpoint_cams[0].image_width)
-        print(mask_in_image.shape)
-        print(mask_visibility.shape)
-        
-        mask = mask_visibility & mask_in_image
-        flow_0 = flow_0[mask]
-        projections_0 = all_projections[0][mask]
-        raft_flow_0 = torch.tensor(viewpoint_cams[0].flow[0],device="cuda")
-        raft_flow_0_indexed = raft_flow_0[:,projections_0[:,0].long(),projections_0[:,1].long()].T
-
-
-        print(raft_flow_0_indexed.shape)
-        print(flow_0.shape)
-        print(all_projections[0,:,1].max())
-        print(projections_0.max())
-        exit()
-
-        # ## flow frame i
-        # flow_1 = all_projections[2] - all_projections[1]
-        # # mask s.t. only visible points are used for flow
-        # mask_visibility = visibility_filter_list[1].squeeze(0) & visibility_filter_list[2].squeeze(0)
-        # # mask s.t. only points that are in [H,W] are used for flow
-        # mask_in_image = (all_projections[:,1] >= 0) & (all_projections[:,1] < viewpoint_cams[1].image_width) & (all_projections[:,2] >= 0) & \
-        # (all_projections[:,2] < viewpoint_cams[2].image_height)
-
-        # mask = mask_visibility & mask_in_image
-        # flow_1 = flow_1[mask]
-
-        
-        # # raft_flow_0 shape 2 x H x W 
-        # # all_projections[0] N x 2 
-        # # index raft_flow_0 with all_projections[0]
+        all_rotations = torch.cat(all_rotations,0)
 
 
 
-        
-
-
-        print(raft_flow_0_indexed.shape)
-        print(flow_0.shape)
-        print(raft_flow_0_indexed[:3])
-        raft_flow_1 = viewpoint_cams[1].flow
-
-        exit()
+        # exit()
 
         shadows_mean = render_pkg["shadows_mean"]
-        if user_args.use_wandb and shadows_mean is not None:
+        if user_args.use_wandb and shadows_mean is not None and stage == "fine":
             wandb.log({"train/shadows_mean":render_pkg["shadows_mean"],"train/shadows_std":render_pkg["shadows_std"]},step=iteration)
                     
         radii = torch.cat(radii_list,0).max(dim=0).values
@@ -200,18 +175,104 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
 
         loss = Ll1
-        if user_args.use_wandb:
+        if user_args.use_wandb and stage == "fine":
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
         
-        
+        ## MOMENTUM LOSS 
         all_means_3D_deform = torch.cat(all_means_3D_deform,0)
         l_reg = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
         l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
-        
+
+        ## KNN LOSSES
+        l_iso = None
+        diff_dimensions = False
+        if stage == "fine" and iteration > user_args.reg_iter:
+            
+            if o3d_knn_dists is not None and all_means_3D_deform.shape[1] != o3d_knn_dists.shape[0]:
+                diff_dimensions = True
+            else:
+                diff_dimensions = False
+
+            if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
+                t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
+                o3d_knn_dists, o3d_knn_indices = o3d_knn(t_0_pts, 3)
+                o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                print("updating knn's")
+
+            ## ISOMETRIC LOSS
+            all_l_iso = []
+
+            all_rigidity = []
+            prev_rotations = None
+            prev_i_j_vector = None
+            all_l_rigid = []
+            for i in range(3):
+                # o3d_knn_indices : [N,3], 3 nearest neighbors
+                # means_3D_deform : [N,3]
+                # knn_points : [N,3,3]
+                
+                # compute knn_dists [N,3] distance to KNN
+                means_3D_deform = all_means_3D_deform[i,:,:]
+                knn_points = means_3D_deform[o3d_knn_indices]
+                knn_points = knn_points.reshape(-1,3) # N x 3
+                means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,3,1).reshape(-1,3) # N x 3
+                
+                i_j_vector = knn_points - means_3D_deform_repeated
+                knn_dists = torch.linalg.norm(i_j_vector,dim=-1)
+                
+                # print(knn_dists.shape)
+                # exit()
+                
+                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+
+                all_l_iso.append(l_iso_tmp)
+
+                rotations = all_rotations[i,:,:]
+                knn_rotations = rotations[o3d_knn_indices]
+                knn_rotation_matrices = transforms.quaternion_to_matrix(knn_rotations)
+                knn_rotation_matrices = knn_rotation_matrices.reshape(-1,3,3) # N x 3 x 3
+
+                if prev_rotations is not None:
+                    # compute rigidity loss
+                    # knn_rotation_matrices : [N,3,3], last two dimensions are rotation matrices
+                    l_rigid_tmp = prev_i_j_vector
+                    knn_rotations_inv = knn_rotation_matrices.permute(0,2,1) # R_inv = R.T - N x 3 x 3
+                    relative_rotations = torch.bmm(knn_rotations_inv,prev_rotations) # N x 3 x 3
+                    l_rigid_tmp -= torch.bmm(relative_rotations,i_j_vector.unsqueeze(-1)).squeeze(-1) # N x 3
+                    
+                    l_rigid_tmp = torch.linalg.norm(l_rigid_tmp,dim=-1).mean()
+                    all_l_rigid.append(l_rigid_tmp)
+               
+                
+                prev_rotations = knn_rotation_matrices.clone()
+                prev_i_j_vector = i_j_vector.clone()
+
+                # print(knn_rotations.shape)
+                # exit()
+                
+            l_iso = torch.mean(torch.stack(all_l_iso))
+            if user_args.use_wandb and stage == "fine":
+                wandb.log({"train/l_iso":l_iso},step=iteration)
+            
+            l_rigid = torch.mean(torch.stack(all_l_rigid))
+            if user_args.use_wandb and stage == "fine":
+                wandb.log({"train/l_rigid":l_rigid},step=iteration)
+            
+            
+            
+
+
+
+        ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
             loss += user_args.lambda_momentum * l_reg.mean()
+        
+        ## add isometric term to loss
+        if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
+            loss += user_args.lambda_isometric * l_iso.mean()
 
-        if user_args.use_wandb: 
+
+        if user_args.use_wandb and stage == "fine":
             wandb.log({"train/l_reg":l_reg},step=iteration)
             
         if stage == "fine" and hyper.time_smoothness_weight != 0:
@@ -226,6 +287,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             loss += opt.lambda_lpips * lpipsloss
         
         loss.backward()
+
         viewspace_point_tensor_grad = torch.zeros_like(viewspace_point_tensor)
         for idx in range(0, len(viewspace_point_tensor_list)):
             viewspace_point_tensor_grad = viewspace_point_tensor_grad + viewspace_point_tensor_list[idx].grad
@@ -302,9 +364,10 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     timer = Timer()
     scene = Scene(dataset, gaussians, load_coarse=None, user_args=user_args)
     timer.start()
-    scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
-                             checkpoint_iterations, checkpoint, debug_from,
-                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer,user_args=user_args)
+    if not user_args.no_coarse:
+        scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
+                                checkpoint_iterations, checkpoint, debug_from,
+                                gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer,user_args=user_args)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, "fine", tb_writer, opt.iterations,timer,user_args=user_args)
@@ -361,7 +424,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 psnr_test /= len(config['cameras'])
                 l1_test /= len(config['cameras'])      
 
-                if user_args.use_wandb and config['name'] == "test":
+                if user_args.use_wandb and config['name'] == "test" and stage == "fine":
                     wandb.log({"test/psnr":psnr_test,"test/loss":l1_test},step=iteration)
 
 
@@ -405,17 +468,27 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")
-    parser.add_argument("--time_skip",type=int,default=None)
+    parser.add_argument("--time_skip",type=int,default=1)
     parser.add_argument("--three_steps_batch",type=bool,default=True)
     parser.add_argument("--use_wandb",action="store_true",default=False)
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
-    parser.add_argument("--no_shadow",action="store_true")
+    
     parser.add_argument("--view_skip",default=1,type=int)
     
+    ###  model parameters
+    # disable shadow net
+    parser.add_argument("--no_shadow",action="store_true")
+    parser.add_argument("--no_coarse",action="store_true")
     
     # regularization
+    # momentum term
+    parser.add_argument("--reg_iter",default=5000,type=int)
+    parser.add_argument("--knn_update_iter",default=1000,type=int)
     parser.add_argument("--lambda_momentum",default=0.0,type=float)
+
+    # isometric loss
+    parser.add_argument("--lambda_isometric",default=0.0,type=float)
     
     args = parser.parse_args(sys.argv[1:])
     
@@ -443,3 +516,47 @@ if __name__ == "__main__":
 
     # All done
     print("\nTraining complete.")
+
+
+
+
+
+
+
+    ## flow frame i-1 
+    # flow_0 = all_projections[1] - all_projections[0]
+    # # mask s.t. only visible points are used for flow
+    # mask_visibility = visibility_filter_list[0].squeeze(0) & visibility_filter_list[1].squeeze(0)
+    # # mask s.t. only points that are in [H,W] are used for flow
+    # mask_in_image = (all_projections[0,:,0] >= 0) & (all_projections[0,:,0] < viewpoint_cams[0].image_height) & (all_projections[0,:,1] >= 0) & \
+    # (all_projections[0,:,1] < viewpoint_cams[0].image_width)
+
+    
+    # mask = mask_visibility & mask_in_image
+    # flow_0 = flow_0[mask]
+    # projections_0 = all_projections[0][mask]
+    # raft_flow_0 = torch.tensor(viewpoint_cams[0].flow[0],device="cuda")
+    # raft_flow_0_indexed = raft_flow_0[:,projections_0[:,0].long(),projections_0[:,1].long()].T
+
+
+
+    # ## flow frame i
+    # flow_1 = all_projections[2] - all_projections[1]
+    # # mask s.t. only visible points are used for flow
+    # mask_visibility = visibility_filter_list[1].squeeze(0) & visibility_filter_list[2].squeeze(0)
+    # # mask s.t. only points that are in [H,W] are used for flow
+    # mask_in_image = (all_projections[:,1] >= 0) & (all_projections[:,1] < viewpoint_cams[1].image_width) & (all_projections[:,2] >= 0) & \
+    # (all_projections[:,2] < viewpoint_cams[2].image_height)
+
+    # mask = mask_visibility & mask_in_image
+    # flow_1 = flow_1[mask]
+
+    
+    # # raft_flow_0 shape 2 x H x W 
+    # # all_projections[0] N x 2 
+    # # index raft_flow_0 with all_projections[0]
+
+    # print(raft_flow_0_indexed.shape)
+    # print(flow_0.shape)
+    # print(raft_flow_0_indexed[:3])
+    # raft_flow_1 = viewpoint_cams[1].flow
