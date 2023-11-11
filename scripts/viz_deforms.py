@@ -84,9 +84,13 @@ def main():
     args = parse_args()
 
     npz_files = glob.glob(os.path.join(args.dir,'log_deform_*.npz'),recursive=True)
-    # sort based on the float number in the file name
-    npz_files.sort(key=lambda f: float(''.join(filter(str.isdigit, f))))
-    times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
+    # sort based on the float number in the file name, [0,1.0] e.g. 0.1, 0.01
+    
+    file_0 = npz_files[0]
+    time = float(file_0.split('/')[-1].replace('log_deform_','').replace('.npz',''))
+   
+    npz_files.sort(key=lambda f: float(f.split('/')[-1].replace('log_deform_','').replace('.npz','')))
+
     trajs = []
     for npz_file in npz_files:
         deforms_data = np.load(npz_file)

@@ -262,11 +262,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     cam_infos = []
     
     flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.npz")
-    data = np.load(flow_file)
-    print("Loading optic flow..")
-    all_flow = data['flow']
-    img_paths_flow = data['img_paths']
-    print("Finished loading optic flow..")
+    # data = np.load(flow_file)
+    # print("Loading optic flow..")
+    # all_flow = data['flow']
+    # img_paths_flow = data['img_paths']
+    # print("Finished loading optic flow..")
 
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
@@ -305,8 +305,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 
 
                 # check if file_path is in img_paths
-                if file_path in img_paths_flow:
-                    flow = all_flow[img_paths_flow == file_path]
+                # if file_path in img_paths_flow:
+                #     flow = all_flow[img_paths_flow == file_path]
                 
                 cam_name = os.path.join(path, file_path)
                 time = mapper[frame["time"]]
@@ -333,7 +333,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time,view_id=view_id,time_id=time_id,flow=flow))
+                                time = time,view_id=view_id,time_id=time_id,flow=None))
     return cam_infos
 def read_timeline(path):
     with open(os.path.join(path, "transforms_train.json")) as json_file:

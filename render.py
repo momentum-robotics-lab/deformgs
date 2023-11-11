@@ -32,7 +32,7 @@ to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
 def merge_deform_logs(folder):
     npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
     # sort based on the float number in the file name
-    npz_files.sort(key=lambda f: float(''.join(filter(str.isdigit, f))))
+    npz_files.sort(key=lambda f: float(f.split('/')[-1].replace('log_deform_','').replace('.npz','')))
     times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
     trajs = []
     for npz_file in npz_files:

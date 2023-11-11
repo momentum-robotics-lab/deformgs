@@ -184,11 +184,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
 
         ## KNN LOSSES
-        l_iso = None
+        l_iso, l_rigid = None, None
         diff_dimensions = False
         if stage == "fine" and iteration > user_args.reg_iter:
             
-            if o3d_knn_dists is not None and all_means_3D_deform.shape[1] != o3d_knn_dists.shape[0]:
+            if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*3 != o3d_knn_dists.shape[0]:
                 diff_dimensions = True
             else:
                 diff_dimensions = False
@@ -261,8 +261,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             
             
 
-
-
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
             loss += user_args.lambda_momentum * l_reg.mean()
@@ -271,6 +269,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
             loss += user_args.lambda_isometric * l_iso.mean()
 
+        if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
+            loss += user_args.lambda_rigidity * l_rigid.mean()
 
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/l_reg":l_reg},step=iteration)
@@ -489,6 +489,9 @@ if __name__ == "__main__":
 
     # isometric loss
     parser.add_argument("--lambda_isometric",default=0.0,type=float)
+    
+    # rigidity loss
+    parser.add_argument("--lambda_rigidity",default=0.0,type=float)
     
     args = parser.parse_args(sys.argv[1:])
     
