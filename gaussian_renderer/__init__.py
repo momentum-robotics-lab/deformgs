@@ -205,5 +205,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "projections":projections_cam,
             "rotations": rotations_deform,
             "opacities": opacity_final,
+            "shadows":shadow_scalars,
             }
 

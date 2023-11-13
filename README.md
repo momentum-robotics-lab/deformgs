@@ -123,3 +123,12 @@ If you find this repository/work helpful in your research, welcome to cite the p
   year={2023}
 }
 ```
+
+## Current commands
+
+Training:
+python3 train.py -s data/corl_1_dense/ --port 6017 --expname "corl_1_dense_rigid_small" --configs arguments/mdnerf-dataset/cube.py --lambda_w 2000 --lambda_rigidity 4.0 --use_wandb --wandb_project corl_1_dense --wandb_name rigid
+
+Rendering:
+python3 render.py --model_path "output/corl_1_dense_rigid_small/" --skip_train --skip_video --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 100 --show_flow --log_deform
+

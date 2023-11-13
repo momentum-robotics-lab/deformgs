@@ -13,7 +13,7 @@ def o3d_knn(pts, num_knn):
         indices.append(i[1:])
         sq_dists.append(d[1:])
 
-    return np.sqrt(np.array(sq_dists)), np.array(indices)
+    return np.array(sq_dists), np.array(indices)
 
 def build_rotation(q):
     norm = torch.sqrt(q[:, 0] * q[:, 0] + q[:, 1] * q[:, 1] + q[:, 2] * q[:, 2] + q[:, 3] * q[:, 3])

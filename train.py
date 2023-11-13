@@ -44,7 +44,6 @@ except ImportError:
 
 
 
-
 def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations, 
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, stage, tb_writer, train_iter,timer,user_args=None):
@@ -71,7 +70,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     first_iter += 1
     lpips_model = lpips.LPIPS(net="alex").cuda()
     video_cams = scene.getVideoCameras()
-    o3d_knn_dists, o3d_knn_indices = None, None
+    o3d_knn_dists, o3d_knn_indices, knn_weights = None, None, None
+    
     for iteration in range(first_iter, final_iter+1):        
         if network_gui.conn == None:
             network_gui.try_connect()
@@ -125,6 +125,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_projections = []
         all_rotations = []
         all_opacities = []
+        all_shadows = []
+        all_shadows_std = []
         
         for viewpoint_cam in viewpoint_cams:
             
@@ -141,19 +143,15 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             all_projections.append(render_pkg["projections"][None,:,:])
             all_rotations.append(render_pkg["rotations"][None,:,:])
             all_opacities.append(render_pkg["opacities"][None,:])
+            all_shadows.append(render_pkg["shadows"][None,:])
+            all_shadows_std.append(render_pkg["shadows_std"])
 
         all_projections = torch.cat(all_projections,0)
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
-
-
-
-        # exit()
-
-        shadows_mean = render_pkg["shadows_mean"]
-        if user_args.use_wandb and shadows_mean is not None and stage == "fine":
-            wandb.log({"train/shadows_mean":render_pkg["shadows_mean"],"train/shadows_std":render_pkg["shadows_std"]},step=iteration)
-                    
+        all_shadows = torch.cat(all_shadows,0)
+        all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
+                     
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
@@ -177,19 +175,22 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
 
         ## KNN LOSSES
-        l_iso, l_rigid = None, None
+        l_iso, l_rigid, l_shadow_mean, l_shadow_delta = None, None, None, None
         diff_dimensions = False
         if stage == "fine" and iteration > user_args.reg_iter:
             
-            if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*3 != o3d_knn_dists.shape[0]:
+            if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*args.k_nearest != o3d_knn_dists.shape[0]:
                 diff_dimensions = True
             else:
                 diff_dimensions = False
 
             if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
                 t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
-                o3d_knn_dists, o3d_knn_indices = o3d_knn(t_0_pts, 3)
+                o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
+                o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
                 o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
+                knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
                 
                 if args.use_wandb and stage == "fine":
                     wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
@@ -210,7 +211,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 means_3D_deform = all_means_3D_deform[i,:,:]
                 knn_points = means_3D_deform[o3d_knn_indices]
                 knn_points = knn_points.reshape(-1,3) # N x 3
-                means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,3,1).reshape(-1,3) # N x 3
+                means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,args.k_nearest,1).reshape(-1,3) # N x 3
+
                 curr_offsets = knn_points - means_3D_deform_repeated
                 knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
                 if args.use_wandb and stage == "fine":
@@ -232,8 +234,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     rot = build_rotation(rel_rot)
 
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
-                    weights = torch.ones((curr_offset_in_prev_coord.shape[0]),device="cuda")
-                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, weights)
+                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
                     all_l_rigid.append(l_rigid_tmp)
                     
                 
@@ -251,7 +252,19 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/l_rigid":l_rigid},step=iteration)
             
+            mean_shadow = all_shadows.mean()
+            shadow_std = all_shadows_std.mean()
+    
+            l_shadow_mean = mean_shadow # incentivize a lower shadow mean
             
+            delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
+            delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
+            
+            l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
+            
+            if user_args.use_wandb and shadows_mean is not None and stage == "fine":
+                wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
+                           "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_deltas},step=iteration)
         
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
@@ -263,6 +276,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
             loss += user_args.lambda_rigidity * l_rigid.mean()
+        
+        if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
+            loss += user_args.lambda_shadow * l_shadow_mean.mean()    
+            
+        if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
+            loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
 
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/l_reg":l_reg},step=iteration)
@@ -460,14 +479,13 @@ if __name__ == "__main__":
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument("--expname", type=str, default = "")
     parser.add_argument("--configs", type=str, default = "")
-    parser.add_argument("--time_skip",type=int,default=1)
     parser.add_argument("--three_steps_batch",type=bool,default=True)
     parser.add_argument("--use_wandb",action="store_true",default=False)
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
     
     parser.add_argument("--view_skip",default=1,type=int)
-    
+    parser.add_argument("--time_skip",type=int,default=1)
     ###  model parameters
     # disable shadow net
     parser.add_argument("--no_shadow",action="store_true")
@@ -483,8 +501,14 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_isometric",default=0.0,type=float)
     
     # rigidity loss
-    parser.add_argument("--lambda_rigidity",default=0.0,type=float)
+    parser.add_argument("--lambda_rigidity",default=4.0,type=float)
     
+    # shadow loss
+    parser.add_argument("--lambda_shadow_mean",default=0.0,type=float)
+    parser.add_argument("--lambda_shadow_delta",default=0.0,type=float)
+    
+    parser.add_argument("--lambda_w",default=2000,type=float)
+    parser.add_argument("--k_nearest",default=20,type=int)
     args = parser.parse_args(sys.argv[1:])
     
     if args.use_wandb:
