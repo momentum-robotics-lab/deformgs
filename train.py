@@ -143,14 +143,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             all_projections.append(render_pkg["projections"][None,:,:])
             all_rotations.append(render_pkg["rotations"][None,:,:])
             all_opacities.append(render_pkg["opacities"][None,:])
-            all_shadows.append(render_pkg["shadows"][None,:])
+            shadows = render_pkg["shadows"]
+            if shadows is not None:
+                all_shadows.append(shadows[None,:])
+                
             all_shadows_std.append(render_pkg["shadows_std"])
 
         all_projections = torch.cat(all_projections,0)
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
-        all_shadows = torch.cat(all_shadows,0)
-        all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
+        
                      
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -252,6 +254,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/l_rigid":l_rigid},step=iteration)
             
+            all_shadows = torch.cat(all_shadows,0)
+            all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
+            
             mean_shadow = all_shadows.mean()
             shadow_std = all_shadows_std.mean()
     
@@ -262,9 +267,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             
             l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
             
-            if user_args.use_wandb and shadows_mean is not None and stage == "fine":
+            if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
-                           "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_deltas},step=iteration)
+                           "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
         
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
