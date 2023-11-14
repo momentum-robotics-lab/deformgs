@@ -141,7 +141,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
             all_projections.append(render_pkg["projections"][None,:,:])
-            all_rotations.append(render_pkg["rotations"][None,:,:])
+            all_rotations.append(norm_quat(render_pkg["rotations"][None,:,:]))
             all_opacities.append(render_pkg["opacities"][None,:])
             shadows = render_pkg["shadows"]
             if shadows is not None:
@@ -153,7 +153,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
         
-                     
+
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
         image_tensor = torch.cat(images,0)
@@ -173,8 +173,17 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         ## MOMENTUM LOSS 
         all_means_3D_deform = torch.cat(all_means_3D_deform,0)
-        l_reg = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
-        l_reg = torch.linalg.norm(l_reg,dim=-1).mean()
+        l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
+        l_momentum = torch.linalg.norm(l_momentum,dim=-1).mean()
+
+        # rotation_0 = quat_mult(quat_inv(all_rotations[1,:,:]),all_rotations[0,:,:])
+        # rotation_1 = quat_mult(quat_inv(all_rotations[2,:,:]),all_rotations[1,:,:])
+
+        # rel_rotation_angle_0 = torch.acos(rotation_0[:,0])
+        # print(rotation_0[:3])
+        # # print(l_momentum_rotation_0.shape)
+        # # print(l_momentum_rotation)
+        # exit()
 
         ## KNN LOSSES
         l_iso, l_rigid, l_shadow_mean, l_shadow_delta = None, None, None, None
@@ -232,7 +241,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 if prev_rotations is not None:
                     # compute rigidity loss
                     # knn_rotation_matrices : [N,3,3], last two dimensions are rotation matrices
-                    rel_rot = quat_mult(knn_rotations_inv,prev_rotations)
+                    rel_rot = quat_mult(prev_rotations,knn_rotations_inv)
                     rot = build_rotation(rel_rot)
 
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
@@ -273,7 +282,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":
-            loss += user_args.lambda_momentum * l_reg.mean()
+            loss += user_args.lambda_momentum * l_momentum.mean()
         
         ## add isometric term to loss
         if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
@@ -283,13 +292,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             loss += user_args.lambda_rigidity * l_rigid.mean()
         
         if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
-            loss += user_args.lambda_shadow * l_shadow_mean.mean()    
+            loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
             
         if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
             loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
 
         if user_args.use_wandb and stage == "fine":
-            wandb.log({"train/l_reg":l_reg},step=iteration)
+            wandb.log({"train/l_momentum":l_momentum},step=iteration)
             
         if stage == "fine" and hyper.time_smoothness_weight != 0:
             # tv_loss = 0
@@ -511,6 +520,8 @@ if __name__ == "__main__":
     # shadow loss
     parser.add_argument("--lambda_shadow_mean",default=0.0,type=float)
     parser.add_argument("--lambda_shadow_delta",default=0.0,type=float)
+
+    parser.add_argument("--lambda_momentum_rotation",default=0.0,type=float)
     
     parser.add_argument("--lambda_w",default=2000,type=float)
     parser.add_argument("--k_nearest",default=20,type=int)

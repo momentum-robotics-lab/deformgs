@@ -130,7 +130,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     
     if log_deform_path is not None:
-            np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_final.cpu().numpy())
+            np.savez(log_deform_path,means3D=means3D.cpu().numpy(),means3D_deform=means3D_final.cpu().numpy(),
+                     rotations=rotations_final.cpu().numpy())
             
     scales_final = pc.scaling_activation(scales_final)
     rotations_final = pc.rotation_activation(rotations_final)

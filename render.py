@@ -35,16 +35,18 @@ def merge_deform_logs(folder):
     npz_files.sort(key=lambda f: float(f.split('/')[-1].replace('log_deform_','').replace('.npz','')))
     times = [float(''.join(filter(str.isdigit, os.path.basename(f)) )) for f in npz_files]
     trajs = []
+    rotations = []
     for npz_file in npz_files:
         deforms_data = np.load(npz_file)
-        xyzs = deforms_data['means3D']
         xyzs_deformed = deforms_data['means3D_deform']
+        rotations.append(deforms_data['rotations'])
         trajs.append(xyzs_deformed)
 
 
     trajs = np.stack(trajs)
+    rotations = np.stack(rotations)
     
-    np.savez(os.path.join(folder,'all_trajs.npz'),traj=trajs)
+    np.savez(os.path.join(folder,'all_trajs.npz'),traj=trajs,rotations=rotations)
     print("saved all trajs to {}".format(os.path.join(folder,'all_trajs.npz')))
     print("shape of all trajs: {}".format(trajs.shape))
     

@@ -34,6 +34,9 @@ def build_rotation(q):
     rot[:, 2, 2] = 1 - 2 * (x * x + y * y)
     return rot
 
+def norm_quat(q):
+    return q / torch.norm(q, dim=-1, keepdim=True)
+
 def quat_mult(q1, q2):
     w1, x1, y1, z1 = q1.T
     w2, x2, y2, z2 = q2.T
