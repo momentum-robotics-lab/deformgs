@@ -75,8 +75,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
-    arrow_tickness = 1
-    raddii_threshold = 10
+    arrow_tickness = 2
+    raddii_threshold = 0
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
@@ -94,12 +94,17 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
+            n_gaussians = current_projections.shape[0]
             current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
             (current_projections[:,1] < view.image_width)
             
-            current_visible = render_pkg["radii"].to("cpu").numpy() > raddii_threshold
+            radii = render_pkg["radii"].to("cpu").numpy()
+            current_visible = radii > raddii_threshold
+            # fraction of visible gaussians
+            current_visible_frac = current_visible.sum()/n_gaussians
+            print(current_visible_frac)
             current_mask = current_visible & current_mask_in_image          
-            for i in range(current_projections.shape[0])[::args.flow_skip]:
+            for i in range(n_gaussians)[::args.flow_skip]:
                 if current_mask[i]:
                     rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = [0,255,0]
 

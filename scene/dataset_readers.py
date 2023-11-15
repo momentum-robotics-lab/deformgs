@@ -264,7 +264,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     
     flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
     imgpaths_file = os.path.join(path, 'optic_flow',split, "img_paths.npy")
-    if os.path.exists(flow_file) and os.path.exists(imgpaths_file):
+    # if os.path.exists(flow_file) and os.path.exists(imgpaths_file):
+    if False:
         data =  h5py.File(flow_file,'r')
         print("Loading optic flow..")
         all_flow = data['flow'][:]

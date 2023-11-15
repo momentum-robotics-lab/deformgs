@@ -232,7 +232,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # exit()
 
         ## KNN LOSSES
-        l_iso, l_rigid, l_shadow_mean, l_shadow_delta = None, None, None, None
+        l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring = None, None, None, None, None
         diff_dimensions = False
         if stage == "fine" and iteration > user_args.reg_iter:
             
@@ -256,9 +256,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             ## ISOMETRIC LOSS
             all_l_iso = []
 
+            
+            all_l_spring = []
+            
             prev_rotations = None
             prev_offsets = None
             all_l_rigid = []
+            prev_knn_dists = None
             for i in range(3):
                 # o3d_knn_indices : [N,3], 3 nearest neighbors
                 # means_3D_deform : [N,3]
@@ -279,6 +283,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 
                 l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
 
+                if prev_knn_dists is not None:
+                    l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
+                    all_l_spring.append(l_spring_tmp)
+                
+                prev_knn_dists = knn_dists.clone()
+                
                 all_l_iso.append(l_iso_tmp)
 
                 rotations = all_rotations[i,:,:]
@@ -302,8 +312,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # exit()
                 
             l_iso = torch.mean(torch.stack(all_l_iso))
+            l_spring = torch.mean(torch.stack(all_l_spring))
             if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/l_iso":l_iso},step=iteration)
+            
+            if user_args.use_wandb and stage == "fine":
+                wandb.log({"train/l_spring":l_spring},step=iteration)
             
             l_rigid = torch.mean(torch.stack(all_l_rigid))
             if user_args.use_wandb and stage == "fine":
@@ -345,6 +359,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         if user_args.lambda_deformation_mag > 0 and stage == "fine":
             loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
+            
+        if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
+            loss += user_args.lambda_spring * l_spring.mean()
 
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/l_momentum":l_momentum,"train/l_deform_mag":l_deformation_mag},step=iteration)
@@ -573,6 +590,7 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_momentum_rotation",default=0.0,type=float)
 
     parser.add_argument("--lambda_deformation_mag",default=0.0,type=float)
+    parser.add_argument("--lambda_spring",default=0.0,type=float)
     
     parser.add_argument("--lambda_w",default=2000,type=float)
     parser.add_argument("--k_nearest",default=20,type=int)
