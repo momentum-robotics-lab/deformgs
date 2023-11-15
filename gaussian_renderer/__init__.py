@@ -105,6 +105,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                                                                          time[deformation_point])        
 
         scales_deform, opacity_deform = scales, opacity 
+        # scales_deform = scales
 
         
 

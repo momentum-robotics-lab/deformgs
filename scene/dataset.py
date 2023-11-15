@@ -54,7 +54,9 @@ class MDNerfDataset(Dataset):
         self.args = args
         self.viewpoint_ids = np.unique([data.view_id for data in dataset])
         self.time_ids = np.unique([data.time_id for data in dataset])
-        
+        self.times = np.unique([data.time for data in dataset])
+        self.times.sort()
+
         self.n_viewpoints = len(self.viewpoint_ids)
         self.n_times = len(self.time_ids)
         

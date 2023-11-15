@@ -28,6 +28,7 @@ from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 from utils.general_utils import PILtoTorch
 from tqdm import tqdm
+import h5py
 class CameraInfo(NamedTuple):
     uid: int
     R: np.array
@@ -261,12 +262,21 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train'):
     cam_infos = []
     
-    flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.npz")
-    # data = np.load(flow_file)
-    # print("Loading optic flow..")
-    # all_flow = data['flow']
-    # img_paths_flow = data['img_paths']
-    # print("Finished loading optic flow..")
+    flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
+    imgpaths_file = os.path.join(path, 'optic_flow',split, "img_paths.npy")
+    if os.path.exists(flow_file) and os.path.exists(imgpaths_file):
+        data =  h5py.File(flow_file,'r')
+        print("Loading optic flow..")
+        all_flow = data['flow'][:]
+        print("optic flow shape: ",all_flow.shape)
+        
+        print("Finished loading optic flow..")
+        img_paths_flow = np.load(imgpaths_file)
+
+    else:
+        print("No optic flow found")
+        all_flow = None
+        img_paths_flow = None
 
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
@@ -303,10 +313,13 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     if view_id % view_skip != 0:
                         continue
                 
-
+                
+                flow = None
                 # check if file_path is in img_paths
-                # if file_path in img_paths_flow:
-                #     flow = all_flow[img_paths_flow == file_path]
+                if img_paths_flow is not None:
+                    if file_path in img_paths_flow:
+                        flow = all_flow[img_paths_flow == file_path]
+
                 
                 cam_name = os.path.join(path, file_path)
                 time = mapper[frame["time"]]
@@ -333,7 +346,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time,view_id=view_id,time_id=time_id,flow=None))
+                                time = time,view_id=view_id,time_id=time_id,flow=flow))
     return cam_infos
 def read_timeline(path):
     with open(os.path.join(path, "transforms_train.json")) as json_file:
