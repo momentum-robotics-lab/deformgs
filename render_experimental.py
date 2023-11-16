@@ -75,13 +75,11 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     current_projections = None 
     prev_visible = None
 
-    print(len(views))
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
     arrow_tickness = 1
     raddii_threshold = 0
-
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
@@ -100,15 +98,29 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+
+        depth = render_pkg["depth"].to("cpu").numpy()
+
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
+            
             current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
             (current_projections[:,1] < view.image_width)
+            
+            # current_depth_projections = depth[0,current_projections[:,1].astype(np.int),current_projections[:,0].astype(np.int)]
+            # current_gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()
+            # cam_center = view.camera_center.cpu().numpy()
+            # gaussian_dists = np.linalg.norm(current_gaussian_positions - cam_center,axis=-1)
+
+            # depth_mask = (gaussian_dists - 0.05) <= current_depth_projections
+
+
+            opacity = render_pkg["opacities"].to("cpu").numpy().flatten()
             
             radii = render_pkg["radii"].to("cpu").numpy()
             current_visible = radii > raddii_threshold
             # fraction of visible gaussians
-            current_mask = current_visible & current_mask_in_image          
+            current_mask = current_visible & current_mask_in_image        
             for i in range(n_gaussians)[::args.flow_skip]:
                 if current_mask[i]:
                     color_idx = (i//args.flow_skip) % len(colors)

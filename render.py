@@ -100,6 +100,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
             current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
