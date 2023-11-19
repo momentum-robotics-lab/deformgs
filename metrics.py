@@ -21,15 +21,19 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser
 
-def readImages(renders_dir, gt_dir):
+def readImages(renders_dir, gt_dir, return_tensor=True):
     renders = []
     gts = []
     image_names = []
     for fname in os.listdir(renders_dir):
         render = Image.open(renders_dir / fname)
         gt = Image.open(gt_dir / fname)
-        renders.append(tf.to_tensor(render).unsqueeze(0)[:, :3, :, :].cuda())
-        gts.append(tf.to_tensor(gt).unsqueeze(0)[:, :3, :, :].cuda())
+        if return_tensor:
+            renders.append(tf.to_tensor(render).unsqueeze(0)[:, :3, :, :].cuda())
+            gts.append(tf.to_tensor(gt).unsqueeze(0)[:, :3, :, :].cuda())
+        else:
+            renders.append(render)
+            gts.append(gt)
         image_names.append(fname)
     return renders, gts, image_names
 
@@ -62,16 +66,21 @@ def evaluate(model_paths):
                 method_dir = test_dir / method
                 gt_dir = method_dir/ "gt"
                 renders_dir = method_dir / "renders"
-                renders, gts, image_names = readImages(renders_dir, gt_dir)
+                renders, gts, image_names = readImages(renders_dir, gt_dir, return_tensor=False)
 
                 ssims = []
                 psnrs = []
                 lpipss = []
 
                 for idx in tqdm(range(len(renders)), desc="Metric evaluation progress"):
-                    ssims.append(ssim(renders[idx], gts[idx]))
-                    psnrs.append(psnr(renders[idx], gts[idx]))
-                    lpipss.append(lpips(renders[idx], gts[idx], net_type='vgg'))
+                    render, gt = renders[idx], gts[idx]
+                    render = tf.to_tensor(render).unsqueeze(0)[:, :3, :, :].cuda()
+                    gt = tf.to_tensor(gt).unsqueeze(0)[:, :3, :, :].cuda()
+                    ssims.append(ssim(render, gt))
+                    psnrs.append(psnr(render, gt))
+                    lpipss.append(lpips(render, gt, net_type='vgg'))
+                    # free up the memory
+                    del render, gt
 
                 print("Scene: ", scene_dir,  "SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5"))
                 print("Scene: ", scene_dir,  "PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))

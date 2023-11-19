@@ -67,6 +67,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     
     all_times = [view.time for view in views]
     n_gaussians = len(all_times)
+    
+
     todo_times = np.unique(all_times)
     n_times = len(todo_times)
     colors = colormap[np.arange(n_gaussians) % len(colormap)]
@@ -79,7 +81,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
-    arrow_tickness = 1
+    arrow_tickness = 2
     raddii_threshold = 0
 
 
@@ -102,6 +104,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
 
         if args.show_flow:
+            flow_idxs = np.random.choice(n_gaussians,args.n_flow,replace=False)
             current_projections = render_pkg["projections"].to("cpu").numpy()
             current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
             (current_projections[:,1] < view.image_width)
@@ -110,9 +113,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             current_visible = radii > raddii_threshold
             # fraction of visible gaussians
             current_mask = current_visible & current_mask_in_image          
-            for i in range(n_gaussians)[::args.flow_skip]:
+            for i in np.array(range(n_gaussians))[flow_idxs]:
                 if current_mask[i]:
-                    color_idx = (i//args.flow_skip) % len(colors)
+                    color_idx = i % len(colors)
                 
                     rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = colors[color_idx]
 
@@ -126,9 +129,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                     prev_mask = prev_visible & prev_mask_in_image
                     
                     traj_img = np.ascontiguousarray(traj_img)
-                    for i in range(current_projections.shape[0])[::args.flow_skip]:
+                    for i in np.array(range(current_projections.shape[0]))[flow_idxs]:
                         # draw arrow from prev_projections to current_projections
-                        color_idx = (i//args.flow_skip) % len(colors)
+                        color_idx = i % len(colors)
                         if prev_mask[i] and current_mask[i]:
                             traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
 
@@ -208,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_deform", action="store_true")
     parser.add_argument("--three_steps_batch",type=bool,default=False)
     parser.add_argument("--show_flow",action="store_true")
-    parser.add_argument("--flow_skip",type=int,default=1)
+    parser.add_argument("--n_flow",type=int,default=None)
     parser.add_argument("--no_shadow",action="store_true")
 
     args = get_combined_args(parser)

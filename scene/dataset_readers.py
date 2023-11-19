@@ -314,7 +314,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     if view_id % view_skip != 0:
                         continue
                 
-                
+                if view_id >= 25:
+                    continue
                 flow = None
                 # check if file_path is in img_paths
                 if img_paths_flow is not None:

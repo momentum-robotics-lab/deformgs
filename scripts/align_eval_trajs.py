@@ -70,9 +70,12 @@ args = parser.parse_args()
 
 gt_data = np.load(args.gt_file)
 gt_traj = gt_data['traj']
+print('Gt traj: {}'.format(gt_traj.shape))
+
 
 traj_data = np.load(args.traj_file)
 trajs = traj_data['traj']
+print("Inferred trajs shape: {}".format(trajs.shape))
 rotations = traj_data['rotations']
 
 # prep for 3d plot

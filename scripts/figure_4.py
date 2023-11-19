@@ -32,6 +32,7 @@ def project_points(means3D_deform,projection):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--folder',type=str,required=True)
+parser.add_argument('--frame_end',type=int,default=40)
 args = parser.parse_args()
 
 colors = colormap[np.arange(1000) % len(colormap)]
@@ -44,6 +45,9 @@ proj_mat = torch.tensor(data['transform_matrix'],device=device,dtype=torch.float
 traj_path = os.path.join(args.folder,'traj.npz')
 gt_path = os.path.join(args.folder,'gt.npz')
 gt_traj = torch.tensor(np.load(gt_path)['traj'],device=device,dtype=torch.float32)
+if args.frame_end is not None:
+    gt_traj = gt_traj[:args.frame_end]
+
 
 traj = torch.tensor(np.load(traj_path)['traj'],device=device,dtype=torch.float32)
 
@@ -57,10 +61,11 @@ prev_gt_points = None
 prev_gt_mask = None
 
 arrow_tickness = 2
-flow_skip = 10
+line_thickness = 2
+flow_skip = 50
+draw_alpha = 0.5
 
-
-for i in range(40):
+for i in range(args.frame_end):
     points = project_points(traj[i],proj_mat)
     current_mask = (points[:,0] >= 0) & (points[:,0] < 800) & (points[:,1] >= 0) & \
                 (points[:,1] < 800)
@@ -76,9 +81,20 @@ for i in range(40):
             color_idx = (j) % len(colors)
             if mask_in_image[j]:
                 # inferred
-                img = cv2.arrowedLine(img,(int(prev_points[j,0]),int(prev_points[j,1])),(int(points[j,0]),int(points[j,1])),np.array([0,0,1.0]),arrow_tickness)
+                img_draw = img.copy()
+                img_draw_2 = img.copy()
+                cv2.arrowedLine(img_draw,(int(prev_points[j,0]),int(prev_points[j,1])),(int(points[j,0]),int(points[j,1])),np.array([1.0,0.0,0.0]),arrow_tickness)
+                cv2.arrowedLine(img_draw_2,(int(prev_gt_points[j,0]),int(prev_gt_points[j,1])),(int(gt_points[j,0]),int(gt_points[j,1])),np.array([0.0,0.5,0]),arrow_tickness)
+
+                # line between the two points 
+                cv2.line(img_draw,(int(points[j,0]),int(points[j,1])),(int(gt_points[j,0]),int(gt_points[j,1])),np.array([1.0,0.0,0.0]),line_thickness)
+                # img = cv2.addWeighted(img_draw, draw_alpha, img, 1 - draw_alpha, 0)
+
                 # img = cv2.circle(img,(int(points[j,0]),int(points[j,1])),3,np.array([0,0,1.0]),-1) 
-                img = cv2.arrowedLine(img,(int(prev_gt_points[j,0]),int(prev_gt_points[j,1])),(int(gt_points[j,0]),int(gt_points[j,1])),np.array([1.0,0,0]),arrow_tickness)
+                # img_draw_2 = cv2.arrowedLine(img,(int(prev_gt_points[j,0]),int(prev_gt_points[j,1])),(int(gt_points[j,0]),int(gt_points[j,1])),np.array([1.0,0,0]),arrow_tickness)
+
+                img = (0.5) * img_draw + (0.5) * img_draw_2
+                # img = img_draw
                 # gt
                 
                     
@@ -89,6 +105,14 @@ for i in range(40):
     prev_gt_mask = current_gt_mask
             
 points = points[mask_in_image]
-plt.imshow(img)
+# save img
+# prep img for cv2 saving
+img = (img*255).astype(np.uint8)
+# rgb to bgr
+img = img[:,:,::-1]
+
+cv2.imwrite(os.path.join(args.folder,'img_proj.png'),img)
+
+# plt.imshow(img)
 # plt.scatter(points[:,0],points[:,1],s=1)
-plt.savefig(os.path.join(args.folder,'img_proj.png'))
+# plt.savefig(os.path.join(args.folder,'img_proj.png'))

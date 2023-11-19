@@ -78,14 +78,27 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
-    arrow_tickness = 1
+    arrow_tickness = 2
     raddii_threshold = 0
 
+    desired_idx = 824
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         log_deform_path = None
 
         view_time = view.time
+        view_id = view.view_id
+        time_id = view.time_id
+        
+
+        if idx == desired_idx:
+            print("found desired view and time")
+            print(view.view_id,view.time_id)
+            
+            print(view.full_proj_transform)
+            exit()
+            break
+        
 
         if prev_projections is None:
             traj_img = np.zeros((view.image_height,view.image_width,3))
