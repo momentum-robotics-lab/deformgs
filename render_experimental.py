@@ -54,6 +54,50 @@ def merge_deform_logs(folder):
     
 
 
+def visualize(gaussian_dists,depth,visible_projections,depth_mask_visible):
+    # subfig 
+    ax = plt.subplot(1,2,1)
+    ax.imshow(depth[0])
+    # ax.scatter(visible_projections[:,0],visible_projections[:,1],s=1,c='r')
+    # plot the points that made the cutoff
+    ax.scatter(visible_projections[depth_mask_visible,0],visible_projections[depth_mask_visible,1],s=5,c='b')
+    # add cbar to ax
+    cbar = plt.colorbar(ax.images[0],ax=ax)
+    depth_map_gaussians = np.zeros_like(depth[0])
+    depth_map_gaussians[visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)] = gaussian_dists
+    ax2 = plt.subplot(1,2,2)
+    ax2.imshow(depth_map_gaussians)
+    cbar = plt.colorbar(ax2.images[0],ax=ax2)
+    plt.show()
+
+def get_mask(projections=None,gaussian_positions=None,depth=None,cam_center=None,height=800,width=800,depth_threshold=0.2):
+    if depth.ndim == 3:
+        depth = depth[0]
+
+
+    # assert none 
+    assert projections is not None
+    assert gaussian_positions is not None
+    assert depth is not None
+    assert cam_center is not None
+    
+    # get the visible projections
+    mask_in_image = (projections[:,0] >= 0) & (projections[:,0] < height) & (projections[:,1] >= 0) & \
+            (projections[:,1] < width)
+    
+    depth_mask = np.ones_like(mask_in_image,dtype=np.bool)
+    
+    visible_projections = projections[mask_in_image]
+    visible_gaussian_positions = gaussian_positions[mask_in_image]
+
+    # get the occlosion mask
+    visible_depth = depth[visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)]
+    gaussian_dists = np.linalg.norm(visible_gaussian_positions - cam_center,axis=-1)
+
+    depth_mask[mask_in_image] = (gaussian_dists - depth_threshold) <= visible_depth
+
+    return depth_mask & mask_in_image
+
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
@@ -73,6 +117,11 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     prev_projections = None 
     current_projections = None 
     prev_visible = None
+
+    all_trajs = None
+    all_projections = None
+
+    prev_mask = None
 
     view_id = views[0].view_id
 
@@ -102,76 +151,49 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
         
         depth = render_pkg["depth"].to("cpu").numpy()
-        
+        depth[depth == 0] = 10e3  # set zero depth to a large value for visualization purposes
+
+        if all_trajs is None:
+            all_trajs = render_pkg["means3D_deform"].unsqueeze(0).cpu().numpy()
+            all_projections = render_pkg["projections"].unsqueeze(0).cpu().numpy()
+        else:
+            all_trajs = np.concatenate((all_trajs,render_pkg["means3D_deform"].unsqueeze(0).cpu().numpy()),axis=0)
+            all_projections = np.concatenate((all_projections,render_pkg["projections"].unsqueeze(0).cpu().numpy()),axis=0)
 
         if args.show_flow:
+            traj_img = np.zeros((view.image_height,view.image_width,3))
             current_projections = render_pkg["projections"].to("cpu").numpy()
             
-            current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
-            (current_projections[:,1] < view.image_width)
+            # current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
+            # (current_projections[:,1] < view.image_width)
             
-            depth_mask = np.ones_like(current_mask_in_image,dtype=np.bool)
-            visible_projections = current_projections[current_mask_in_image]
+            # depth_mask = np.ones_like(current_mask_in_image,dtype=np.bool)
+            # visible_projections = current_projections[current_mask_in_image]
 
-            current_depth_projections = depth[0,visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)]
+            # current_depth_projections = depth[0,visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)]
 
-            gaussian_positions_visible = render_pkg["means3D_deform"].cpu().numpy()[current_mask_in_image]
-            cam_center = view.camera_center.cpu().numpy()
+            # gaussian_positions_visible = render_pkg["means3D_deform"].cpu().numpy()[current_mask_in_image]
+            # cam_center = view.camera_center.cpu().numpy()
             
             
+            # gaussian_dists = np.linalg.norm(gaussian_positions_visible - cam_center,axis=-1)
+            # depth_mask_visible = (gaussian_dists - 0.1) <= current_depth_projections
+            # depth_mask[current_mask_in_image] = depth_mask_visible
 
-            # swap x and y
-            # cam_center = np.array([cam_center[1],cam_center[0],cam_center[2]])
+            # opacity = render_pkg["opacities"].to("cpu").numpy().flatten()
+            # opacity_mask = opacity > opacity_threshold
 
-            # scatter 3d guassian_positions_visible
-            # 3d plot
-            # if view_time == 1.0:
-            #     fig = plt.figure()
-            #     ax = fig.add_subplot(projection='3d')
-            #     ax.scatter(gaussian_positions_visible[:,0],gaussian_positions_visible[:,1],gaussian_positions_visible[:,2],c='r',marker='o')
-            #     # plot camera center
-            #     ax.scatter(cam_center[0],cam_center[1],cam_center[2],c='b',marker='o')
+            # radii = render_pkg["radii"].to("cpu").numpy()
+            # current_visible = radii > raddii_threshold
 
-            #     ax.set_xlabel('X')
-            #     ax.set_ylabel('Y')
-            #     ax.set_zlabel('Z')
-            #     # set ratio to equal betwen axes
-            #     ax.set_box_aspect([1,1,1])
-            #     plt.show()
-            #     exit()
-
-            gaussian_dists = np.linalg.norm(gaussian_positions_visible - cam_center,axis=-1)
-            depth_mask_visible = (gaussian_dists) <= current_depth_projections
-            depth_mask[current_mask_in_image] = depth_mask_visible
-
-            if view_time == 1.0 or view_time ==0.0:
-                print("median queried depth: {}".format(np.median(current_depth_projections)))
-                print("median gaussian dist: {}".format(np.median(gaussian_dists)))
-                # subfig 
-                ax = plt.subplot(1,2,1)
-                ax.imshow(depth[0])
-                # ax.scatter(visible_projections[:,0],visible_projections[:,1],s=1,c='r')
-                # plot the points that made the cutoff
-                ax.scatter(visible_projections[depth_mask_visible,0],visible_projections[depth_mask_visible,1],s=5,c='b')
-                # add cbar to ax
-                cbar = plt.colorbar(ax.images[0],ax=ax)
-                depth_map_gaussians = np.zeros_like(depth[0])
-                depth_map_gaussians[visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)] = gaussian_dists
-                ax2 = plt.subplot(1,2,2)
-                ax2.imshow(depth_map_gaussians)
-                cbar = plt.colorbar(ax2.images[0],ax=ax2)
-
-                plt.show()
-
-            opacity = render_pkg["opacities"].to("cpu").numpy().flatten()
-            opacity_mask = opacity > opacity_threshold
-
-            radii = render_pkg["radii"].to("cpu").numpy()
-            current_visible = radii > raddii_threshold
-            # fraction of visible gaussians
-            current_mask = current_visible & current_mask_in_image & opacity_mask
             # current_mask = current_visible & current_mask_in_image & opacity_mask & depth_mask    
+            gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()
+            cam_center = view.camera_center.cpu().numpy()
+            current_mask = get_mask(projections=current_projections,gaussian_positions=gaussian_positions,depth=depth,cam_center=cam_center,
+            height=view.image_height,width=view.image_width)
+
             rendering =  np.ascontiguousarray(rendering)   
+            # show scatter on the currently visible gaussians
             for i in range(n_gaussians)[::args.flow_skip]:
                 if current_mask[i]:
                     color_idx = (i//args.flow_skip) % len(colors)
@@ -180,18 +202,31 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
             if view_id != view.view_id:
                 prev_projections = None
+                all_trajs = None
                 traj_img = np.zeros((view.image_height,view.image_width,3))
             else:
-                if prev_projections is not None:
+                if all_trajs.shape[0] > 1:
                     # draw flow at previous frame
-
+                    traj_img = np.ascontiguousarray(np.zeros((view.image_height,view.image_width,3)))
                     
-                    traj_img = np.ascontiguousarray(traj_img)
-                    for i in range(current_projections.shape[0])[::args.flow_skip]:
-                        # draw arrow from prev_projections to current_projections
-                        color_idx = (i//args.flow_skip) % len(colors)
-                        if prev_mask[i] and current_mask[i]:
-                            traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
+                    for j in range(all_trajs.shape[0]-1):
+                        prev_projections = all_projections[j]
+                        current_projections = all_projections[j+1]
+
+                        prev_gaussians = all_trajs[j]
+                        current_gaussians = all_trajs[j+1]
+
+                        prev_mask = get_mask(projections=prev_projections,gaussian_positions=prev_gaussians,depth=depth,cam_center=cam_center,
+                        height=view.image_height,width=view.image_width)
+                        current_mask = get_mask(projections=current_projections,gaussian_positions=current_gaussians,depth=depth,cam_center=cam_center,
+                        height=view.image_height,width=view.image_width)
+
+
+                        for i in range(current_projections.shape[0])[::args.flow_skip]:
+                            # draw arrow from prev_projections to current_projections
+                            color_idx = (i//args.flow_skip) % len(colors)
+                            if prev_mask[i] :
+                                traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
                             
                 rendering[traj_img > 0] = traj_img[traj_img > 0]
                 prev_projections = current_projections
