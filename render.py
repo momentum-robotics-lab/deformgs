@@ -121,6 +121,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
             if view_id != view.view_id:
                 prev_projections = None
+                traj_img = np.zeros((view.image_height,view.image_width,3))
             else:
                 if prev_projections is not None:
                     # draw flow at previous frame

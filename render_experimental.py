@@ -66,11 +66,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     render_list = []
     
     all_times = [view.time for view in views]
-    n_gaussians = len(all_times)
+    n_gaussians = gaussians._xyz.shape[0]
     todo_times = np.unique(all_times)
     n_times = len(todo_times)
     colors = colormap[np.arange(n_gaussians) % len(colormap)]
-
     prev_projections = None 
     current_projections = None 
     prev_visible = None
@@ -80,26 +79,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     arrow_color = (0,255,0)
     arrow_tickness = 2
     raddii_threshold = 0
+    opacity_threshold = 0
 
-    desired_idx = 824
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         log_deform_path = None
 
         view_time = view.time
-        view_id = view.view_id
-        time_id = view.time_id
-        
-
-        if idx == desired_idx:
-            print("found desired view and time")
-            print(view.view_id,view.time_id)
-            
-            print(view.full_proj_transform)
-            exit()
-            break
-        
-
+                
         if prev_projections is None:
             traj_img = np.zeros((view.image_height,view.image_width,3))
 
@@ -109,10 +96,13 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
         
-        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
-        rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
 
+        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
+
+        rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+        
         depth = render_pkg["depth"].to("cpu").numpy()
+        
 
         if args.show_flow:
             current_projections = render_pkg["projections"].to("cpu").numpy()
@@ -120,34 +110,81 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             current_mask_in_image = (current_projections[:,0] >= 0) & (current_projections[:,0] < view.image_height) & (current_projections[:,1] >= 0) & \
             (current_projections[:,1] < view.image_width)
             
-            # current_depth_projections = depth[0,current_projections[:,1].astype(np.int),current_projections[:,0].astype(np.int)]
-            # current_gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()
-            # cam_center = view.camera_center.cpu().numpy()
-            # gaussian_dists = np.linalg.norm(current_gaussian_positions - cam_center,axis=-1)
+            depth_mask = np.ones_like(current_mask_in_image,dtype=np.bool)
+            visible_projections = current_projections[current_mask_in_image]
 
-            # depth_mask = (gaussian_dists - 0.05) <= current_depth_projections
+            current_depth_projections = depth[0,visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)]
 
+            gaussian_positions_visible = render_pkg["means3D_deform"].cpu().numpy()[current_mask_in_image]
+            cam_center = view.camera_center.cpu().numpy()
+            
+            
+
+            # swap x and y
+            # cam_center = np.array([cam_center[1],cam_center[0],cam_center[2]])
+
+            # scatter 3d guassian_positions_visible
+            # 3d plot
+            # if view_time == 1.0:
+            #     fig = plt.figure()
+            #     ax = fig.add_subplot(projection='3d')
+            #     ax.scatter(gaussian_positions_visible[:,0],gaussian_positions_visible[:,1],gaussian_positions_visible[:,2],c='r',marker='o')
+            #     # plot camera center
+            #     ax.scatter(cam_center[0],cam_center[1],cam_center[2],c='b',marker='o')
+
+            #     ax.set_xlabel('X')
+            #     ax.set_ylabel('Y')
+            #     ax.set_zlabel('Z')
+            #     # set ratio to equal betwen axes
+            #     ax.set_box_aspect([1,1,1])
+            #     plt.show()
+            #     exit()
+
+            gaussian_dists = np.linalg.norm(gaussian_positions_visible - cam_center,axis=-1)
+            depth_mask_visible = (gaussian_dists) <= current_depth_projections
+            depth_mask[current_mask_in_image] = depth_mask_visible
+
+            if view_time == 1.0 or view_time ==0.0:
+                print("median queried depth: {}".format(np.median(current_depth_projections)))
+                print("median gaussian dist: {}".format(np.median(gaussian_dists)))
+                # subfig 
+                ax = plt.subplot(1,2,1)
+                ax.imshow(depth[0])
+                # ax.scatter(visible_projections[:,0],visible_projections[:,1],s=1,c='r')
+                # plot the points that made the cutoff
+                ax.scatter(visible_projections[depth_mask_visible,0],visible_projections[depth_mask_visible,1],s=5,c='b')
+                # add cbar to ax
+                cbar = plt.colorbar(ax.images[0],ax=ax)
+                depth_map_gaussians = np.zeros_like(depth[0])
+                depth_map_gaussians[visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)] = gaussian_dists
+                ax2 = plt.subplot(1,2,2)
+                ax2.imshow(depth_map_gaussians)
+                cbar = plt.colorbar(ax2.images[0],ax=ax2)
+
+                plt.show()
 
             opacity = render_pkg["opacities"].to("cpu").numpy().flatten()
-            
+            opacity_mask = opacity > opacity_threshold
+
             radii = render_pkg["radii"].to("cpu").numpy()
             current_visible = radii > raddii_threshold
             # fraction of visible gaussians
-            current_mask = current_visible & current_mask_in_image        
+            current_mask = current_visible & current_mask_in_image & opacity_mask
+            # current_mask = current_visible & current_mask_in_image & opacity_mask & depth_mask    
+            rendering =  np.ascontiguousarray(rendering)   
             for i in range(n_gaussians)[::args.flow_skip]:
                 if current_mask[i]:
                     color_idx = (i//args.flow_skip) % len(colors)
-                
-                    rendering[int(current_projections[i,1]),int(current_projections[i,0]),:] = colors[color_idx]
+                    cv2.circle(rendering,(int(current_projections[i,0]),int(current_projections[i,1])),3,colors[color_idx],-1)
+                    # rendering[int(current_projections[i,0]),int(current_projections[i,1]),:] = colors[color_idx]
 
             if view_id != view.view_id:
                 prev_projections = None
+                traj_img = np.zeros((view.image_height,view.image_width,3))
             else:
                 if prev_projections is not None:
                     # draw flow at previous frame
-                    prev_mask_in_image = (prev_projections[:,0] >= 0) & (prev_projections[:,0] < view.image_height) & (prev_projections[:,1] >= 0) & \
-                    (prev_projections[:,1] < view.image_width)
-                    prev_mask = prev_visible & prev_mask_in_image
+
                     
                     traj_img = np.ascontiguousarray(traj_img)
                     for i in range(current_projections.shape[0])[::args.flow_skip]:
@@ -155,10 +192,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                         color_idx = (i//args.flow_skip) % len(colors)
                         if prev_mask[i] and current_mask[i]:
                             traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
-
+                            
                 rendering[traj_img > 0] = traj_img[traj_img > 0]
                 prev_projections = current_projections
-                prev_visible = current_visible
+                prev_mask = current_mask
             
             view_id = view.view_id
             
