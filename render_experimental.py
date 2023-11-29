@@ -26,7 +26,7 @@ from time import time
 import glob 
 import matplotlib.pyplot as plt
 from colormap import colormap
-
+import seaborn as sns
 
 tonumpy = lambda x : x.cpu().numpy()
 to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
@@ -54,11 +54,11 @@ def merge_deform_logs(folder):
     
 
 
-def visualize(depth, projections):
+def visualize(depth):
     # subfig 
     ax = plt.subplot(1,2,1)
     ax.imshow(depth[0])
-    ax.scatter(projections[:,0],projections[:,1],s=1,c='r')
+    # ax.scatter(projections[:,0],projections[:,1],s=1,c='r')
     # plot the points that made the cutoff
     # ax.scatter(visible_projections[depth_mask_visible,0],visible_projections[depth_mask_visible,1],s=5,c='b')
     # add cbar to ax
@@ -116,7 +116,20 @@ def get_mask(projections=None,gaussian_positions=None,depth=None,cam_center=None
 
     return depth_mask & mask_in_image , mask_in_image
 
-def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None):
+def find_closest_gauss(gt,gauss):
+    # gt : N x 3 : numpy array
+    # gauss : M x 3 : numpy array
+    # return : N x 1
+    # for each gt point, find the closest gauss point
+    # return shape N x 1 
+    gt = torch.tensor(gt,device='cuda',dtype=torch.float32)
+    gauss = torch.tensor(gauss,device='cuda',dtype=torch.float32)
+    gt = gt.unsqueeze(0).repeat(gauss.shape[0],1,1)
+    gauss = gauss.unsqueeze(1).repeat(1,gt.shape[1],1)
+    dists = torch.norm(gt-gauss,dim=-1)
+    return torch.argmin(dists,dim=0).cpu().numpy()
+
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None,gt=None):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
@@ -131,7 +144,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     n_gaussians = gaussians._xyz.shape[0]
     todo_times = np.unique(all_times)
     n_times = len(todo_times)
-    colors = colormap[np.arange(n_gaussians) % len(colormap)]
+    # colors = colormap[np.arange(n_gaussians) % len(colormap)]
+    colors = sns.color_palette(n_colors=n_gaussians)
     prev_projections = None 
     current_projections = None 
     prev_visible = None
@@ -145,9 +159,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
-    arrow_tickness = 2
+    arrow_tickness = 1
     raddii_threshold = 0
-    opacity_threshold = 0
+    opacity_threshold = -10e10 # disabling this effectively
+    depth_dist_threshold = 1.0
+    
+    opacities = None
+    opacity_mask = None 
+    gt_idxs = None
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
@@ -166,28 +185,42 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
-
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+
+        if opacities is None:
+            opacities = render_pkg["opacities"].to("cpu").numpy()
+            opacity_mask = opacities > opacity_threshold
+        
+            
         
         depth = render_pkg["depth"].to("cpu").numpy()
-        depth[depth == 0] = 10e3  # set zero depth to a large value for visualization purposes
-
+            
+        depth[depth < depth_dist_threshold] = 10e3  # set small depth to a large value for visualization purposes
+        
+        if gt_idxs is None:
+            if gt is not None:
+                gt_t0 = gt[0]
+                gt_idxs = find_closest_gauss(gt_t0,render_pkg["means3D_deform"].cpu().numpy())
+                n_gaussians = gt_idxs.shape[0]
+            else:
+                gt_idxs = np.arange(n_gaussians)
+        
         if all_trajs is None:
             all_times = np.array([view_time])
-            all_trajs = render_pkg["means3D_deform"].unsqueeze(0).cpu().numpy()
+            all_trajs = render_pkg["means3D_deform"][gt_idxs].unsqueeze(0).cpu().numpy()
         else:
             all_times = np.concatenate((all_times,np.array([view_time])),axis=0)
-            all_trajs = np.concatenate((all_trajs,render_pkg["means3D_deform"].unsqueeze(0).cpu().numpy()),axis=0)
-            
-
+            all_trajs = np.concatenate((all_trajs,render_pkg["means3D_deform"][gt_idxs].unsqueeze(0).cpu().numpy()),axis=0)
+        
+        
+                
         if args.show_flow:
             traj_img = np.zeros((view.image_height,view.image_width,3))
-            current_projections = render_pkg["projections"].to("cpu").numpy()
+            current_projections = render_pkg["projections"].to("cpu").numpy()[gt_idxs]
             
-# (gaussian_dists,depth,visible_projections,depth_mask_visible):
-            
+           
 
-            gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()
+            gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()[gt_idxs]
             cam_center = view.camera_center.cpu().numpy()
             current_mask, image_mask = get_mask(projections=current_projections,gaussian_positions=gaussian_positions,depth=depth,cam_center=cam_center,
             height=view.image_height,width=view.image_width)
@@ -195,9 +228,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             rendering =  np.ascontiguousarray(rendering)   
             # show scatter on the currently visible gaussians
             for i in range(n_gaussians)[::args.flow_skip]:
-                if current_mask[i]:
+                if current_mask[i] and opacity_mask[i]:
                     color_idx = (i//args.flow_skip) % len(colors)
-                    cv2.circle(rendering,(int(current_projections[i,0]),int(current_projections[i,1])),3,colors[color_idx],-1)
+                    cv2.circle(rendering,(int(current_projections[i,0]),int(current_projections[i,1])),2,colors[color_idx],-1)
                     # rendering[int(current_projections[i,0]),int(current_projections[i,1]),:] = colors[color_idx]
 
             if view_id != view.view_id:
@@ -228,7 +261,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                             for i in range(current_projections.shape[0])[::args.flow_skip]:
                                 # draw arrow from prev_projections to current_projections
                                 color_idx = (i//args.flow_skip) % len(colors)
-                                if prev_mask[i] :
+                                if prev_mask[i] and opacity_mask[i]:
                                     traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
                                 
                 rendering[traj_img > 0] = traj_img[traj_img > 0]
@@ -267,23 +300,28 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     
     imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), video_imgs, fps=30, quality=8)
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool,log_deform=False,user_args=None):
+    
+    gt_path = os.path.join(dataset.source_path, "gt.npz")
+    gt = None
+    if os.path.exists(gt_path):
+        gt = np.load(gt_path)['traj']
+    
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False,user_args=user_args)
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-
         if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args)
+            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args,gt=gt)
         if not skip_test:
             log_folder = os.path.join(args.model_path, "test", "ours_{}".format(scene.loaded_iter))
             delete_previous_deform_logs(log_folder)
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args) 
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args,gt=gt) 
             if user_args.log_deform:
                 merge_deform_logs(log_folder)           
         if not skip_video:
-            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform,args=user_args)
+            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform,args=user_args,gt=gt)
  
 def delete_previous_deform_logs(folder):
     npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)

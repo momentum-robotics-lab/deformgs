@@ -314,8 +314,6 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     if view_id % view_skip != 0:
                         continue
                 
-                if view_id >= 25:
-                    continue
                 flow = None
                 # check if file_path is in img_paths
                 if img_paths_flow is not None:
@@ -324,7 +322,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 
                 cam_name = os.path.join(path, file_path)
-                time = mapper[frame["time"]]
+                # time = mapper[frame["time"]]
+                time = frame["time"]
                 matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
                 R = -np.transpose(matrix[:3,:3])
                 R[:,0] = -R[:,0]
@@ -374,7 +373,15 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test')
     print("Generating Video Transforms")
-    video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
+
+    video_path = os.path.join(path, "video.json")
+    video_cam_infos = None
+    if os.path.exists(video_path):
+        video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=1,view_skip=1,split='video')
+
+    if video_cam_infos is None:
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
+
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
