@@ -19,6 +19,6 @@ for SCENE in $SCENE_1 $SCENE_2 $SCENE_3 $SCENE_5 $SCENE_6 $SCENE_7;
 do
     for isometry in $ISOMETRY_2 $ISOMETRY_3 $ISOMETRY_4;
     do 
-        python3 render_experimental.py --model_path "output/iso_ablation/${SCENE}_${isometry}" --skip_train --skip_video --configs arguments/mdnerf-dataset/cube.py --view_skip 2 --time_skip 2 --log_deform 
+        python3 render_experimental.py --model_path "output/iso_ablation/${SCENE}_${isometry}" --skip_train --skip_video --configs arguments/mdnerf-dataset/cube.py --view_skip 200 --time_skip 1 --log_deform 
     done
 done
