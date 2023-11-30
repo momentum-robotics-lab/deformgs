@@ -3,7 +3,7 @@ import numpy as np
 import glob 
 import matplotlib.pyplot as plt 
 import natsort
-
+from iso_psnr_manual_points import manual_points
 parser = argparse.ArgumentParser()
 parser.add_argument('-i','--input',default = "output/iso_ablation")
 args = parser.parse_args()
@@ -61,7 +61,10 @@ for result_file in result_files:
             elif "LPIPS" in line:
                 LPIPS = float(line.split(":")[-1])
         measurements.append(Measurement(scene,iso,psnr=PSNR,ssim=SSIM,lpips=LPIPS))
-                
+
+for manual_point in manual_points:
+    measurements.append(Measurement(manual_point.scene,manual_point.iso,psnr=manual_point.psnr))
+
                 
 unique_scenes = natsort.natsorted(np.unique(all_scenes))
 scene_objects = []
@@ -78,12 +81,22 @@ for scene_object in scene_objects:
     scene_object.print()
 
 # plot the PSNR
+scene_4 = scene_objects[-1]
+scene_objects = scene_objects[:-1]
+#insert back in 
+scene_objects.insert(3,scene_4)
 plt.rcParams.update({'font.size': 22})
 plt.figure(figsize=(12,8))
 for scene_object in scene_objects:
     iso = [x.iso for x in scene_object.measurements]
     psnr = [x.psnr for x in scene_object.measurements]
-    plt.plot(iso,psnr,label=scene_object.scene)
+    scene = scene_object.scene
+    if scene == 'scene_7':
+        scene = 'scene_4'
+    
+    scene = scene.replace("_"," ")
+    plt.plot(iso,psnr,label=scene)
+    
 plt.xlabel("ISO")
 plt.ylabel("PSNR")
 # put legend right above the plot without intersecting with the plot
