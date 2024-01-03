@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "../../../../home/bart/Documents"
+		},
+		{
+			"path": "../../hw6"
+		},
+		{
+			"path": "../../tartancalib"
+		},
+		{
+			"path": "../../tartan_calib"
+		},
+		{
+			"path": "../../transporter-nets-torch"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {}
+}

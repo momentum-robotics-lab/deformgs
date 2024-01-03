@@ -307,8 +307,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     file_name = file_name.split(".")[0]
                 
                 # format is r_viewid_timeid
-                view_id = int(file_name.split("_")[1])
-                time_id = int(file_name.split("_")[2])
+                view_id = int(file_name.split("_")[-2])
+                time_id = int(file_name.split("_")[-1])
                 
                 if view_skip is not None:
                     if view_id % view_skip != 0:
@@ -390,7 +390,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 2000
+    num_pts = 200000
     print(f"Generating random point cloud ({num_pts})...")
     
     # We create random points inside the bounds of the synthetic Blender scenes

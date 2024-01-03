@@ -75,26 +75,29 @@ for scene_object in scene_objects:
 
 # plot the PSNR
 plt.rcParams.update({'font.size': 22})
-plt.figure(figsize=(12,8))
+plt.figure(figsize=(12,2))
 scene_4 = scene_objects[-1]
 scene_objects = scene_objects[:-1]
 #insert back in 
 scene_objects.insert(3,scene_4)
 for scene_object in scene_objects:
     iso = [x.iso for x in scene_object.measurements]
-    mte = [x.mte for x in scene_object.measurements]
+    mte = np.array([x.mte for x in scene_object.measurements])
+    mte /= mte[0]
+    
     scene = scene_object.scene
     if scene == 'scene 7':
         scene = 'scene 4'
+    scene = scene.replace('s','S')
     plt.plot(iso,mte,label=scene)
-plt.xlabel("ISO")
-plt.ylabel("MTE")
+plt.xlabel(r'$\mathcal{L}^{{iso}}$')
+plt.ylabel("MTE [-] \n Normalized")
 # put legend right above the plot without intersecting with the plot
-plt.legend(bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=3)
+# plt.legend(bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=6)
 
 # log scale on x-axis
 plt.xscale('log')
 # set sticks to 10^-2 -> 10^0 
 plt.xticks([0.01,0.1,1])
 plt.grid()
-plt.savefig("MTE.png",bbox_inches='tight')
+plt.savefig("MTE.pdf",bbox_inches='tight')

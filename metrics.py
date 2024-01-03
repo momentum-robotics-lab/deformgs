@@ -86,6 +86,14 @@ def evaluate(model_paths):
                 print("Scene: ", scene_dir,  "PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))
                 print("Scene: ", scene_dir,  "LPIPS: {:>12.7f}".format(torch.tensor(lpipss).mean(), ".5"))
                 print("")
+                
+                # also write to txt file
+                with open(scene_dir + "/results.txt", 'a') as fp:
+                    fp.write("Method: " + method + "\n")
+                    fp.write("Scene: " + scene_dir + " SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5") + "\n")
+                    fp.write("Scene: " + scene_dir + " PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5") + "\n")
+                    fp.write("Scene: " + scene_dir + " LPIPS: {:>12.7f}".format(torch.tensor(lpipss).mean(), ".5") + "\n")
+                    fp.write("\n")
 
                 full_dict[scene_dir][method].update({"SSIM": torch.tensor(ssims).mean().item(),
                                                         "PSNR": torch.tensor(psnrs).mean().item(),

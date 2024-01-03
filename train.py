@@ -210,9 +210,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
 
         loss = Ll1
+        
+        
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
-        
+            wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
+
         ## MOMENTUM LOSS 
         all_means_3D_deform = torch.cat(all_means_3D_deform,0)
         l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]

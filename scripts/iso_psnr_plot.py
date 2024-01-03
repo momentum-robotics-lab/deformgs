@@ -86,10 +86,11 @@ scene_objects = scene_objects[:-1]
 #insert back in 
 scene_objects.insert(3,scene_4)
 plt.rcParams.update({'font.size': 22})
-plt.figure(figsize=(12,8))
+plt.figure(figsize=(12,2))
 for scene_object in scene_objects:
     iso = [x.iso for x in scene_object.measurements]
-    psnr = [x.psnr for x in scene_object.measurements]
+    psnr = np.array([x.psnr for x in scene_object.measurements])
+    psnr /= psnr[0]
     scene = scene_object.scene
     if scene == 'scene_7':
         scene = 'scene_4'
@@ -97,15 +98,15 @@ for scene_object in scene_objects:
     scene = scene.replace("_"," ")
     plt.plot(iso,psnr,label=scene)
     
-plt.xlabel("ISO")
-plt.ylabel("PSNR")
+plt.xlabel(r'$\mathcal{L}^{{iso}}$')
+plt.ylabel("PSNR [-] \n Normalized")
 # put legend right above the plot without intersecting with the plot
-plt.legend(bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=3)
+# plt.legend(bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=3)
 
 # log scale on x-axis
 plt.xscale('log')
 # set sticks to 10^-2 -> 10^0 
 plt.xticks([0.01,0.1,1])
 plt.grid()
-plt.savefig("PSNR.png",bbox_inches='tight')
+plt.savefig("PSNR.pdf",bbox_inches='tight')
 
