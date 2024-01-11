@@ -1,6 +1,6 @@
 export RIGIDITY_LAMBDA=0.1
 export LAMBDA_SPRING=0.0
-export LAMBDA_ISOMETRIC=1.0
+export LAMBDA_ISOMETRIC=0.1
 
 # python3 render_experimental.py --model_path "output/final_scenes/scene_1/" --skip_train --skip_video --configs arguments/mdnerf-dataset/cube.py --view_skip 20 --flow_skip 100 --show_flow --log_deform 
 python3 train.py -s data/final_scenes/scene_2/ --port 6021 --expname "final_scenes/scene_2" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING --lambda_momentum 0.1 --use_wandb --wandb_project final_scene_2 --wandb_name black_bg --k_nearest 5 --lambda_isometric $LAMBDA_ISOMETRIC

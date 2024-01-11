@@ -365,6 +365,10 @@ def read_timeline(path):
         timestamp_mapper[time] = time/max_time_float
 
     return timestamp_mapper, max_time_float
+
+def readPanoptoSceneInfo(path, eval, extension=".png", time_skip=None,view_skip=None):
+    print("Did not find intrinsics in header of json, assuming panoptic studio data (intrinsics for each camera).")
+
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
     # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
@@ -550,6 +554,7 @@ def readdynerfInfo(datadir,use_bg_points,eval):
 sceneLoadTypeCallbacks = {
     "Colmap": readColmapSceneInfo,
     "Blender" : readNerfSyntheticInfo,
+    "Panopto": readPanoptoSceneInfo,
     "dynerf" : readdynerfInfo,
     "nerfies": readHyperDataInfos,  # NeRFies & HyperNeRF dataset proposed by [https://github.com/google/hypernerf/releases/tag/v0.1]
 }
