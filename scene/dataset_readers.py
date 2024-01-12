@@ -233,7 +233,10 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
     render_times = torch.linspace(0,maxtime,render_poses.shape[0])
     with open(os.path.join(path, template_transformsfile)) as json_file:
         template_json = json.load(json_file)
-        fovx = template_json["camera_angle_x"]
+        if "camera_angle_x" in template_json.keys():
+            fovx = template_json["camera_angle_x"]
+        else:
+            fovx = None
     # load a single image to get image info.
     
         
@@ -258,13 +261,36 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         R = -np.transpose(matrix[:3,:3])
         R[:,0] = -R[:,0]
         T = -matrix[:3, 3]
-        fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
-        FovY = fovy 
-        FovX = fovx
-        cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
-                            time = time,time_id=None,view_id=None))
+
+        if fovx is not None:
+            fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
+            FovY = fovy 
+            FovX = fovx
+            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                                image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
+                                time = time,time_id=None,view_id=None))
+            
+        else:
+            k = np.array(frame['k'])
+            f_x = k[0][0]
+            f_y = k[1][1]
+            c_x = k[0][2]
+            c_y = k[1][2]
+            w = frame['w']
+            h = frame['h']
+            
+            FovX = w / (2 * f_x)
+            FovY = h / (2 * f_y)
+            
+            fovx = None 
+
+            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                            image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
+                            time = time,view_id=None,time_id=None,flow=None,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
+
     return cam_infos
+
+
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train'):
     cam_infos = []
     
