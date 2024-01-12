@@ -285,7 +285,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
             fovx = None 
 
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
+                            image_path=image_path, image_name=image_name, width=w, height=h,
                             time = time,view_id=None,time_id=None,flow=None,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
 
     return cam_infos
@@ -394,13 +394,13 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     w = frame['w']
                     h = frame['h']
                     
-                    FovX = w / (2 * f_x)
-                    FovY = h / (2 * f_y)
+                    FovX = focal2fov(f_x,w)
+                    FovY = focal2fov(f_y,h)
                     
                     fovx = None 
 
                     cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                                    image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
+                                    image_path=image_path, image_name=image_name, width=w, height=h,
                                     time = time,view_id=view_id,time_id=time_id,flow=flow,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
 
     return cam_infos

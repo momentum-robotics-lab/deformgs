@@ -12,13 +12,13 @@
 import torch
 from torch import nn
 import numpy as np
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix
+from utils.graphics_utils import getWorld2View2, getProjectionMatrix, getProjectionMatrixPanopto
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", time = 0,
-                 view_id = None, time_id = None, flow = None
+                 view_id = None, time_id = None, flow = None, c_x = None, c_y = None, f_x = None, f_y = None, width=None, height=None
                  ):
         super(Camera, self).__init__()
 
@@ -33,6 +33,13 @@ class Camera(nn.Module):
         self.view_id = view_id
         self.time_id = time_id
         self.flow = flow
+
+        self.f_x = f_x
+        self.f_y = f_y
+        self.c_x = c_x
+        self.c_y = c_y
+        self.width = width
+        self.height = height
 
         try:
             self.data_device = torch.device(data_device)
@@ -61,10 +68,20 @@ class Camera(nn.Module):
 
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1)
         # .cuda()
-        self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1)
+        if f_x is None:
+            self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy)
+        else:
+            self.projection_matrix = getProjectionMatrixPanopto(f_x,f_y,c_x,c_y,width,height,self.znear,self.zfar)
+        
+        # print(self.projection_matrix)
+        # print(self.projection_matrix.shape)
+
+        
         # .cuda()
-        self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
+        self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix)).squeeze(0)
+
         self.camera_center = self.world_view_transform.inverse()[3, :3]
+
 
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform, time):
