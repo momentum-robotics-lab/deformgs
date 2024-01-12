@@ -52,8 +52,21 @@ class Scene:
         if os.path.exists(os.path.join(args.source_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
+            #load json to check if blender or panopto 
+            with open(os.path.join(args.source_path, "transforms_train.json")) as f:
+                data = json.load(f)
+            # check if 'camera_angle_x' or 'fl_x' in header of json file
+            # print all keys of json
+            if 'camera_angle_x' in data.keys() or 'fl_x' in data.keys():
+                print("Found transforms_train.json file with global intrinsics, assuming Blender data set!")
+                scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval,time_skip=time_skip,view_skip=view_skip)            
+            else:
+                print("Found transforms_train.json file without global intrinsics, assuming Panopto data set!")
+                scene_info = sceneLoadTypeCallbacks["Panopto"](args.source_path, args.white_background, args.eval,time_skip=time_skip,view_skip=view_skip)
+            
+            
             print("Found transforms_train.json file, assuming Blender data set!")
-            scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval,time_skip=time_skip,view_skip=view_skip)
+            
         elif os.path.exists(os.path.join(args.source_path, "poses_bounds.npy")):
             scene_info = sceneLoadTypeCallbacks["dynerf"](args.source_path, args.white_background, args.eval)
         elif os.path.exists(os.path.join(args.source_path,"dataset.json")):
