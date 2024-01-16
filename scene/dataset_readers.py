@@ -252,7 +252,8 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         image_name = Path(cam_name).stem
         image = Image.open(image_path)
         im_data = np.array(image.convert("RGBA"))
-        image = PILtoTorch(image,(800,800))
+        # image = PILtoTorch(image,(800,800))
+        image = PILtoTorch(image,None)
         break
     # format information
     for idx, (time, poses) in enumerate(zip(render_times,render_poses)):
@@ -374,7 +375,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 norm_data = im_data / 255.0
                 arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
                 image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-                image = PILtoTorch(image,(800,800))
+                # image = PILtoTorch(image,(800,800))
+                image = PILtoTorch(image,None)
                 
                 if fovx is not None:
                     fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
@@ -626,7 +628,7 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # create pcd
     # if not os.path.exists(ply_path):
     # Since this data set has no colmap data, we start with random points
-    num_pts = 2000
+    num_pts = 200000
     print(f"Generating random point cloud ({num_pts})...")
     threshold = 3
     # xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])

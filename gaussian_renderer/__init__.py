@@ -50,8 +50,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # Set up rasterization configuration
     
-    tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
-    tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
+    if viewpoint_camera.f_x is None:
+        tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
+        tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
+    else:
+        tanfovx = viewpoint_camera.image_width/(2*viewpoint_camera.f_x)
+        tanfovy = viewpoint_camera.image_height/(2*viewpoint_camera.f_y)
         
 
     raster_settings = GaussianRasterizationSettings(
@@ -68,6 +72,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         prefiltered=False,
         debug=False
     )
+
+   
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
@@ -93,6 +99,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     deformation_point = pc._deformation_table
     shadow_scalars = None
     if stage == "coarse" :
+    # if tur
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
     else:
         # means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 

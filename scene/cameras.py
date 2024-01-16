@@ -49,8 +49,15 @@ class Camera(nn.Module):
             self.data_device = torch.device("cuda")
         self.original_image = image.clamp(0.0, 1.0)
         # .to(self.data_device)
-        self.image_width = self.original_image.shape[2]
-        self.image_height = self.original_image.shape[1]
+        if self.width is None:
+            self.image_width = self.original_image.shape[2]
+        else:
+            self.image_width = self.width
+        
+        if self.height is None:
+            self.image_height = self.original_image.shape[1]
+        else:   
+            self.image_height = self.height
 
         if gt_alpha_mask is not None:
             self.original_image *= gt_alpha_mask
@@ -61,7 +68,7 @@ class Camera(nn.Module):
 
             
         self.zfar = 100.0
-        self.znear = 0.01
+        self.znear = 1.0 # DEBUG
 
         self.trans = trans
         self.scale = scale

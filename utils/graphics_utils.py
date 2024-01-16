@@ -68,7 +68,15 @@ def getProjectionMatrix(znear, zfar, fovX, fovY):
     P[3, 2] = z_sign
     P[2, 2] = z_sign * zfar / (zfar - znear)
     P[2, 3] = -(zfar * znear) / (zfar - znear)
-    return P
+    return P.transpose(0,1).unsqueeze(0)
+
+def getProjectionMatrixPanopto(f_x,f_y,c_x,c_y,width,height,znear,zfar):
+    opengl_proj = torch.tensor([[2 * f_x / width, 0.0, -(width - 2 * c_x) / width, 0.0],
+                                [0.0, 2 * f_y / height, -(height - 2 * c_y) / height, 0.0],
+                                [0.0, 0.0, zfar / (zfar - znear), -(zfar * znear) / (zfar - znear)],
+                                [0.0, 0.0, 1.0, 0.0]]).float().unsqueeze(0).transpose(1, 2)
+    return opengl_proj
+
 
 def fov2focal(fov, pixels):
     return pixels / (2 * math.tan(fov / 2))

@@ -210,175 +210,176 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
 
         loss = Ll1
-        
-        
         if user_args.use_wandb and stage == "fine":
-            wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
-            wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
-
-        ## MOMENTUM LOSS 
-        all_means_3D_deform = torch.cat(all_means_3D_deform,0)
-        l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
-        l_momentum = torch.linalg.norm(l_momentum,dim=-1,ord=1).mean() # mean l1 norm
-
-        l_deformation_mag_0 = torch.linalg.norm(all_means_3D_deform[1,:,:] - all_means_3D_deform[0,:,:],dim=-1).mean() # mean l2 norm
-        l_deformation_mag_1 = torch.linalg.norm(all_means_3D_deform[2,:,:] - all_means_3D_deform[1,:,:],dim=-1).mean() # mean l2 norm
-
-        l_deformation_mag = 0.5 * (l_deformation_mag_0 + l_deformation_mag_1)
-        # rotation_0 = quat_mult(quat_inv(all_rotations[1,:,:]),all_rotations[0,:,:])
-        # rotation_1 = quat_mult(quat_inv(all_rotations[2,:,:]),all_rotations[1,:,:])
-
-        # rel_rotation_angle_0 = torch.acos(rotation_0[:,0])
-        # print(rotation_0[:3])
-        # # print(l_momentum_rotation_0.shape)
-        # # print(l_momentum_rotation)
-        # exit()
-
-        ## KNN LOSSES
-        l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring = None, None, None, None, None
-        diff_dimensions = False
-        if stage == "fine" and iteration > user_args.reg_iter:
+                wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
+                wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
+                
+        if len(viewpoint_cams) == 3:
             
-            if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*args.k_nearest != o3d_knn_dists.shape[0]:
-                diff_dimensions = True
-            else:
-                diff_dimensions = False
 
-            if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
-                t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
-                o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
-                o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
-                o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
-                o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
-                knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
+            ## MOMENTUM LOSS 
+            all_means_3D_deform = torch.cat(all_means_3D_deform,0)
+            l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
+            l_momentum = torch.linalg.norm(l_momentum,dim=-1,ord=1).mean() # mean l1 norm
+
+            l_deformation_mag_0 = torch.linalg.norm(all_means_3D_deform[1,:,:] - all_means_3D_deform[0,:,:],dim=-1).mean() # mean l2 norm
+            l_deformation_mag_1 = torch.linalg.norm(all_means_3D_deform[2,:,:] - all_means_3D_deform[1,:,:],dim=-1).mean() # mean l2 norm
+
+            l_deformation_mag = 0.5 * (l_deformation_mag_0 + l_deformation_mag_1)
+            # rotation_0 = quat_mult(quat_inv(all_rotations[1,:,:]),all_rotations[0,:,:])
+            # rotation_1 = quat_mult(quat_inv(all_rotations[2,:,:]),all_rotations[1,:,:])
+
+            # rel_rotation_angle_0 = torch.acos(rotation_0[:,0])
+            # print(rotation_0[:3])
+            # # print(l_momentum_rotation_0.shape)
+            # # print(l_momentum_rotation)
+            # exit()
+
+            ## KNN LOSSES
+            l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring = None, None, None, None, None
+            diff_dimensions = False
+            if stage == "fine" and iteration > user_args.reg_iter:
                 
-                if args.use_wandb and stage == "fine":
-                    wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
-                print("updating knn's")
+                if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*args.k_nearest != o3d_knn_dists.shape[0]:
+                    diff_dimensions = True
+                else:
+                    diff_dimensions = False
 
-            ## ISOMETRIC LOSS
-            all_l_iso = []
-
-            
-            all_l_spring = []
-            
-            prev_rotations = None
-            prev_offsets = None
-            all_l_rigid = []
-            prev_knn_dists = None
-            for i in range(3):
-                # o3d_knn_indices : [N,3], 3 nearest neighbors
-                # means_3D_deform : [N,3]
-                # knn_points : [N,3,3]
-                
-                # compute knn_dists [N,3] distance to KNN
-                means_3D_deform = all_means_3D_deform[i,:,:]
-                knn_points = means_3D_deform[o3d_knn_indices]
-                knn_points = knn_points.reshape(-1,3) # N x 3
-                means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,args.k_nearest,1).reshape(-1,3) # N x 3
-
-                curr_offsets = knn_points - means_3D_deform_repeated
-                knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
-                if args.use_wandb and stage == "fine":
-                    wandb.log({"train/knn_dists":knn_dists.median()},step=iteration)
-                # print(knn_dists.shape)
-                # exit()
-                
-                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
-
-                if prev_knn_dists is not None:
-                    l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
-                    all_l_spring.append(l_spring_tmp)
-                
-                prev_knn_dists = knn_dists.clone()
-                
-                all_l_iso.append(l_iso_tmp)
-
-                rotations = all_rotations[i,:,:]
-                knn_rotations = rotations[o3d_knn_indices].reshape((-1,4))
-                knn_rotations_inv = quat_inv(knn_rotations)
-                if prev_rotations is not None:
-                    # compute rigidity loss
-                    # knn_rotation_matrices : [N,3,3], last two dimensions are rotation matrices
-                    rel_rot = quat_mult(prev_rotations,knn_rotations_inv)
-                    rot = build_rotation(rel_rot)
-
-                    curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
-                    l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
-                    all_l_rigid.append(l_rigid_tmp)
+                if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
+                    t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
+                    o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
+                    o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
+                    o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                    o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
+                    knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
                     
+                    if args.use_wandb and stage == "fine":
+                        wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
+                    print("updating knn's")
+
+                ## ISOMETRIC LOSS
+                all_l_iso = []
+
                 
-                prev_rotations = knn_rotations.clone()
-                prev_offsets = curr_offsets.clone()
-
-                # print(knn_rotations.shape)
-                # exit()
+                all_l_spring = []
                 
-            l_iso = torch.mean(torch.stack(all_l_iso))
-            l_spring = torch.mean(torch.stack(all_l_spring))
-            if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/l_iso":l_iso},step=iteration)
-            
-            if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/l_spring":l_spring},step=iteration)
-            
-            l_rigid = torch.mean(torch.stack(all_l_rigid))
-            if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/l_rigid":l_rigid},step=iteration)
-            
-            all_shadows = torch.cat(all_shadows,0)
-            all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
-            
-            mean_shadow = all_shadows.mean()
-            shadow_std = all_shadows_std.mean()
-    
-            l_shadow_mean = mean_shadow # incentivize a lower shadow mean
-            
-            delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
-            delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
-            
-            l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
-            
-            if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
-                           "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
-        
-        ## add momentum term to loss
-        if user_args.lambda_momentum > 0 and stage == "fine":
-            loss += user_args.lambda_momentum * l_momentum.mean()
-        
-        ## add isometric term to loss
-        if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
-            loss += user_args.lambda_isometric * l_iso.mean()
+                prev_rotations = None
+                prev_offsets = None
+                all_l_rigid = []
+                prev_knn_dists = None
+                for i in range(3):
+                    # o3d_knn_indices : [N,3], 3 nearest neighbors
+                    # means_3D_deform : [N,3]
+                    # knn_points : [N,3,3]
+                    
+                    # compute knn_dists [N,3] distance to KNN
+                    means_3D_deform = all_means_3D_deform[i,:,:]
+                    knn_points = means_3D_deform[o3d_knn_indices]
+                    knn_points = knn_points.reshape(-1,3) # N x 3
+                    means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,args.k_nearest,1).reshape(-1,3) # N x 3
 
-        if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
-            loss += user_args.lambda_rigidity * l_rigid.mean()
+                    curr_offsets = knn_points - means_3D_deform_repeated
+                    knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
+                    if args.use_wandb and stage == "fine":
+                        wandb.log({"train/knn_dists":knn_dists.median()},step=iteration)
+                    # print(knn_dists.shape)
+                    # exit()
+                    
+                    l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+
+                    if prev_knn_dists is not None:
+                        l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
+                        all_l_spring.append(l_spring_tmp)
+                    
+                    prev_knn_dists = knn_dists.clone()
+                    
+                    all_l_iso.append(l_iso_tmp)
+
+                    rotations = all_rotations[i,:,:]
+                    knn_rotations = rotations[o3d_knn_indices].reshape((-1,4))
+                    knn_rotations_inv = quat_inv(knn_rotations)
+                    if prev_rotations is not None:
+                        # compute rigidity loss
+                        # knn_rotation_matrices : [N,3,3], last two dimensions are rotation matrices
+                        rel_rot = quat_mult(prev_rotations,knn_rotations_inv)
+                        rot = build_rotation(rel_rot)
+
+                        curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
+                        l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
+                        all_l_rigid.append(l_rigid_tmp)
+                        
+                    
+                    prev_rotations = knn_rotations.clone()
+                    prev_offsets = curr_offsets.clone()
+
+                    # print(knn_rotations.shape)
+                    # exit()
+                    
+                l_iso = torch.mean(torch.stack(all_l_iso))
+                l_spring = torch.mean(torch.stack(all_l_spring))
+                if user_args.use_wandb and stage == "fine":
+                    wandb.log({"train/l_iso":l_iso},step=iteration)
+                
+                if user_args.use_wandb and stage == "fine":
+                    wandb.log({"train/l_spring":l_spring},step=iteration)
+                
+                l_rigid = torch.mean(torch.stack(all_l_rigid))
+                if user_args.use_wandb and stage == "fine":
+                    wandb.log({"train/l_rigid":l_rigid},step=iteration)
+                
+                all_shadows = torch.cat(all_shadows,0)
+                all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
+                
+                mean_shadow = all_shadows.mean()
+                shadow_std = all_shadows_std.mean()
         
-        if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
-            loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
+                l_shadow_mean = mean_shadow # incentivize a lower shadow mean
+                
+                delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
+                delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
+                
+                l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
+                
+                if user_args.use_wandb and stage == "fine":
+                    wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
+                            "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
             
-        if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
-            loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
+            ## add momentum term to loss
+            if user_args.lambda_momentum > 0 and stage == "fine":
+                loss += user_args.lambda_momentum * l_momentum.mean()
+            
+            ## add isometric term to loss
+            if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
+                loss += user_args.lambda_isometric * l_iso.mean()
 
-        if user_args.lambda_deformation_mag > 0 and stage == "fine":
-            loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
+            if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
+                loss += user_args.lambda_rigidity * l_rigid.mean()
             
-        if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
-            loss += user_args.lambda_spring * l_spring.mean()
+            if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
+                loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
+                
+            if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
+                loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
 
-        if user_args.use_wandb and stage == "fine":
-            wandb.log({"train/l_momentum":l_momentum,"train/l_deform_mag":l_deformation_mag},step=iteration)
-            
-        if stage == "fine" and hyper.time_smoothness_weight != 0:
-            # tv_loss = 0
-            tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.plane_tv_weight, hyper.l1_time_planes)
-            loss += tv_loss
-        if opt.lambda_dssim != 0:
-            ssim_loss = ssim(image_tensor,gt_image_tensor)
-            loss += opt.lambda_dssim * (1.0-ssim_loss)
-        if opt.lambda_lpips !=0:
-            lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
-            loss += opt.lambda_lpips * lpipsloss
+            if user_args.lambda_deformation_mag > 0 and stage == "fine":
+                loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
+                
+            if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
+                loss += user_args.lambda_spring * l_spring.mean()
+
+            if user_args.use_wandb and stage == "fine":
+                wandb.log({"train/l_momentum":l_momentum,"train/l_deform_mag":l_deformation_mag},step=iteration)
+                
+            if stage == "fine" and hyper.time_smoothness_weight != 0:
+                # tv_loss = 0
+                tv_loss = gaussians.compute_regulation(hyper.time_smoothness_weight, hyper.plane_tv_weight, hyper.l1_time_planes)
+                loss += tv_loss
+            if opt.lambda_dssim != 0:
+                ssim_loss = ssim(image_tensor,gt_image_tensor)
+                loss += opt.lambda_dssim * (1.0-ssim_loss)
+            if opt.lambda_lpips !=0:
+                lpipsloss = lpips_loss(image_tensor,gt_image_tensor,lpips_model)
+                loss += opt.lambda_lpips * lpipsloss
         
         loss.backward()
 
