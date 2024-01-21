@@ -60,10 +60,6 @@ class MDNerfDataset(Dataset):
         self.n_viewpoints = len(self.viewpoint_ids)
         self.n_times = len(self.time_ids)
         
-        # assert we have at least 3 timesteps 
-        assert self.n_times > 3
-        
-        
         
         # now order data in a grid of view x time 
         self.ordered_data = np.empty((self.n_viewpoints,self.n_times),dtype=object)
@@ -80,11 +76,13 @@ class MDNerfDataset(Dataset):
         # idx is view_id 
         view_id = idx
         
-        mean_time_id = np.random.randint(1,self.n_times-1)
-        all_steps = [self.get_one_item(view_id,mean_time_id-1),
-                self.get_one_item(view_id,mean_time_id),
-                self.get_one_item(view_id,mean_time_id+1)]
-        
+        if self.n_times >= 3:
+            mean_time_id = np.random.randint(1,self.n_times-1)
+            all_steps = [self.get_one_item(view_id,mean_time_id-1),
+                    self.get_one_item(view_id,mean_time_id),
+                    self.get_one_item(view_id,mean_time_id+1)]
+        else:
+            all_steps = [self.get_one_item(view_id,i) for i in range(self.n_times)]
        
         return all_steps
         

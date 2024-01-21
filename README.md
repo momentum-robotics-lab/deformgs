@@ -1,134 +1,87 @@
-# 4D Gaussian Splatting for Real-Time Dynamic Scene Rendering
+# MD-Splatting: Learning Metric Deformation from 4D Gaussians in Highly Deformable Scenes
 
 ## arXiv Preprint
 
-### [Project Page](https://guanjunwu.github.io/4dgs/index.html)| [arXiv Paper](https://arxiv.org/abs/2310.08528)
-
-
-[Guanjun Wu](https://guanjunwu.github.io/)<sup>1*</sup>, [Taoran Yi](https://github.com/taoranyi)<sup>2*</sup>,
-[Jiemin Fang](https://jaminfong.cn/)<sup>3‡</sup>, [Lingxi Xie](http://lingxixie.com/)<sup>3</sup>, </br>[Xiaopeng Zhang](https://scholar.google.com/citations?user=Ud6aBAcAAAAJ&hl=zh-CN)<sup>3</sup>, [Wei Wei](https://www.eric-weiwei.com/)<sup>1</sup>,[Wenyu Liu](http://eic.hust.edu.cn/professor/liuwenyu/)<sup>2</sup>, [Qi Tian](https://www.qitian1987.com/)<sup>3</sup> , [Xinggang Wang](https://xwcv.github.io)<sup>2‡✉</sup>
-
-<sup>1</sup>School of CS, HUST &emsp; <sup>2</sup>School of EIC, HUST &emsp; <sup>3</sup>Huawei Inc. &emsp;
-
-<sup>\*</sup> Equal Contributions. <sup>$\ddagger$</sup> Project Lead. <sup>✉</sup> Corresponding Author. 
+### [Project Page](https://md-splatting.github.io/)| [arXiv Paper](https://arxiv.org/abs/2312.00583)
 
 ---------------------------------------------------
 
 ---
 
 ![block](assets/teaserfig.png)   
-Our method converges very quickly and achieves real-time rendering speed.
-
-Colab demo:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hustvl/4DGaussians/blob/master/4DGaussians.ipynb) (Thanks [camenduru](https://github.com/camenduru/4DGaussians-colab).)
-
-<video width="320" height="240" controls>
-  <source src="assets/teaservideo.mp4" type="video/mp4">
-</video>
-
-<video width="320" height="240" controls>
-  <source src="assets/cut_roasted_beef_time.mp4" type="video/mp4">
-</video>
 
 
-## Environmental Setups
-Please follow the [3D-GS](https://github.com/graphdeco-inria/gaussian-splatting) to install the relative packages.
-```bash
-git clone https://github.com/hustvl/4DGaussians
-cd 4DGaussians
-git submodule update --init --recursive
-conda create -n Gaussians4D python=3.7 
-conda activate Gaussians4D
+## Installation 
 
-pip install -r requirements.txt
+**Docker Image**
+
+We use docker to run our code, you will need to install docker and [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). You can build the docker image by running the following command:
+```
+docker build -f md_splatting.dockerfile -t md_splatting .
+```
+
+If you don't want to build the docker image, you can pull a pre-built image from docker hub:
+```
+docker pull bartduis/4dgausians:latest
+```
+
+Now create a container from the image and run it.
+``` 
+docker run -it --gpus all --network=host --shm-size=2G  --name md_splatting -v /home/username:/workspace md_splatting
+cd /workspace 
 pip install -e submodules/depth-diff-gaussian-rasterization
 pip install -e submodules/simple-knn
 ```
-In our environment, we use pytorch=1.13.1+cu116.
-## Data Preparation
-**For synthetic scenes:**  
-The dataset provided in [D-NeRF](https://github.com/albertpumarola/D-NeRF) is used. You can download the dataset from [dropbox](https://www.dropbox.com/s/0bf6fl0ye2vz3vr/data.zip?dl=0).
+At this point your container is ready to run the code.
 
-**For real dynamic scenes:**  
-The dataset provided in [HyperNeRF](https://github.com/google/hypernerf) is used. You can download scenes from [Hypernerf Dataset](https://github.com/google/hypernerf/releases/tag/v0.1) and organize them as [Nerfies](https://github.com/google/nerfies#datasets). Meanwhile, [Plenoptic Dataset](https://github.com/facebookresearch/Neural_3D_Video) could be downloaded from their official websites. To save the memory, you should extract the frames of each video and then organize your dataset as follows.
+
+## Data
+**For synthetic scenes:**  
+The dataset provided [here](https://drive.google.com/drive/folders/116XTLBUvuiEQPjKXKZP8fYab3F3L1cCd?usp=sharing) can be used with MD-Splatting to enable novel view synthesis and dense tracking. After downloading the dataset, extract the files to the `data` folder. The folder structure should look like this:
+
 ```
 ├── data
-│   | dnerf 
-│     ├── mutant
-│     ├── standup 
+│   | final_scenes 
+│     ├── scene_1
+│     ├── scene_2 
 │     ├── ...
-│   | hypernerf
-│     ├── interp
-│     ├── misc
-│     ├── virg
-│   | dynerf
-│     ├── cook_spinach
-│       ├── cam00
-│           ├── images
-│               ├── 0000.png
-│               ├── 0001.png
-│               ├── 0002.png
-│               ├── ...
-│       ├── cam01
-│           ├── images
-│               ├── 0000.png
-│               ├── 0001.png
-│               ├── ...
-│     ├── cut_roasted_beef
-|     ├── ...
 ```
 
 
 ## Training
-For training synthetic scenes such as `bouncingballs`, run 
+To train models for all scenes from the paper, run the following script:
 ``` 
-python train.py -s data/dnerf/bouncingballs --port 6017 --expname "dnerf/bouncingballs" --configs arguments/dnerf/bouncingballs.py 
+./run_scripts/run_all.sh
 ``` 
-You can customize your training config through the config files.
+
 ## Rendering
-Run the following script to render the images.  
+Run the following script to render images for all scenes. 
 
 ```
-python render.py --model_path "output/dnerf/bouncingballs/"  --skip_train --configs arguments/dnerf/bouncingballs.py  &
+./run_scripts/render_all.sh
 ```
 
+## Run Scripts
 
-## Evaluation
-You can just run the following script to evaluate the model.  
+There are some other useful scripts in the run_scripts directory. Some of it is messy and needs to be cleaned up, but they'll allow you to easily run ablations and log the results.
 
-```
-python metrics.py --model_path "output/dnerf/bouncingballs/" 
-```
-## Scripts
-
-There are some helpful scripts in `scripts/`, please feel free to use them.
 
 ---
 ## Contributions
 
-**This project is still under development. Please feel free to raise issues or submit pull requests to contribute to our codebase.**
-
 ---
-Some source code of ours is borrowed from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting), [k-planes](https://github.com/Giodiro/kplanes_nerfstudio),[HexPlane](https://github.com/Caoang327/HexPlane), [TiNeuVox](https://github.com/hustvl/TiNeuVox). We sincerely appreciate the excellent works of these authors.
+Some source code of ours is borrowed from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting), [k-planes](https://github.com/Giodiro/kplanes_nerfstudio),[HexPlane](https://github.com/Caoang327/HexPlane), [TiNeuVox](https://github.com/hustvl/TiNeuVox), [4DGS](https://github.com/hustvl/4DGaussians). We appreciate the excellent works of these authors.
 
-## Acknowledgement
 
-We would like to express our sincere gratitude to @zhouzhenghong-gt for his revisions to our code and discussions on the content of our paper.
+
 ## Citation
-If you find this repository/work helpful in your research, welcome to cite the paper and give a ⭐.
 ```
-@article{wu20234dgaussians,
-  title={4D Gaussian Splatting for Real-Time Dynamic Scene Rendering},
-  author={Wu, Guanjun and Yi, Taoran and Fang, Jiemin and Xie, Lingxi and Zhang, Xiaopeng and Wei Wei and Liu, Wenyu and Tian, Qi and Wang Xinggang},
-  journal={arXiv preprint arXiv:2310.08528},
-  year={2023}
+@misc{duisterhof2023mdsplatting,
+      title={MD-Splatting: Learning Metric Deformation from 4D Gaussians in Highly Deformable Scenes}, 
+      author={Bardienus P. Duisterhof and Zhao Mandi and Yunchao Yao and Jia-Wei Liu and Mike Zheng Shou and Shuran Song and Jeffrey Ichnowski},
+      year={2023},
+      eprint={2312.00583},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
 }
 ```
-
-## Current commands
-
-Training:
-python3 train.py -s data/corl_1_dense/ --port 6017 --expname "corl_1_dense_rigid_small" --configs arguments/mdnerf-dataset/cube.py --lambda_w 2000 --lambda_rigidity 4.0 --use_wandb --wandb_project corl_1_dense --wandb_name rigid
-
-Rendering:
-python3 render.py --model_path "output/corl_1_dense_rigid_small/" --skip_train --skip_video --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 100 --show_flow --log_deform
-

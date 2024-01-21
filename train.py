@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 from utils.timer import Timer
 from utils.external import *
 import wandb 
-import pytorch3d.transforms as transforms
+# import pytorch3d.transforms as transforms
  
 import lpips
 import open3d as o3d
@@ -194,7 +194,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_projections = torch.cat(all_projections,0)
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
-        
+        all_means_3D_deform = torch.cat(all_means_3D_deform,0)
 
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -216,25 +216,21 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
             wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
 
-        ## MOMENTUM LOSS 
-        all_means_3D_deform = torch.cat(all_means_3D_deform,0)
-        l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
-        l_momentum = torch.linalg.norm(l_momentum,dim=-1,ord=1).mean() # mean l1 norm
+        n_cams = len(viewpoint_cams)
 
-        l_deformation_mag_0 = torch.linalg.norm(all_means_3D_deform[1,:,:] - all_means_3D_deform[0,:,:],dim=-1).mean() # mean l2 norm
-        l_deformation_mag_1 = torch.linalg.norm(all_means_3D_deform[2,:,:] - all_means_3D_deform[1,:,:],dim=-1).mean() # mean l2 norm
+        l_momentum = 0.0
+        if n_cams >= 3:
+            ## MOMENTUM LOSS 
+            l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
+            l_momentum = torch.linalg.norm(l_momentum,dim=-1,ord=1).mean() # mean l1 norm
 
-        l_deformation_mag = 0.5 * (l_deformation_mag_0 + l_deformation_mag_1)
-        # rotation_0 = quat_mult(quat_inv(all_rotations[1,:,:]),all_rotations[0,:,:])
-        # rotation_1 = quat_mult(quat_inv(all_rotations[2,:,:]),all_rotations[1,:,:])
+        l_deformation_mag = 0.0
+        if n_cams >= 3:
+            l_deformation_mag_0 = torch.linalg.norm(all_means_3D_deform[1,:,:] - all_means_3D_deform[0,:,:],dim=-1).mean() # mean l2 norm
+            l_deformation_mag_1 = torch.linalg.norm(all_means_3D_deform[2,:,:] - all_means_3D_deform[1,:,:],dim=-1).mean() # mean l2 norm
 
-        # rel_rotation_angle_0 = torch.acos(rotation_0[:,0])
-        # print(rotation_0[:3])
-        # # print(l_momentum_rotation_0.shape)
-        # # print(l_momentum_rotation)
-        # exit()
+            l_deformation_mag = 0.5 * (l_deformation_mag_0 + l_deformation_mag_1)
 
-        ## KNN LOSSES
         l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring = None, None, None, None, None
         diff_dimensions = False
         if stage == "fine" and iteration > user_args.reg_iter:
@@ -266,7 +262,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             prev_offsets = None
             all_l_rigid = []
             prev_knn_dists = None
-            for i in range(3):
+            for i in range(n_cams):
                 # o3d_knn_indices : [N,3], 3 nearest neighbors
                 # means_3D_deform : [N,3]
                 # knn_points : [N,3,3]
@@ -334,10 +330,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     
             l_shadow_mean = mean_shadow # incentivize a lower shadow mean
             
-            delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
-            delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
-            
-            l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
+            l_shadow_delta = 0.0 
+            if n_cams >= 3:
+                delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
+                delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
+                
+                l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
             
             if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,

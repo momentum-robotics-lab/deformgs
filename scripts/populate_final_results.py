@@ -5,8 +5,10 @@ import natsort
 import shutil 
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument('--results',type=str,default="/data/bart/CVPR_2024/final_results/")
 parser.add_argument('--output',type=str,default="/data/bart/4DGaussians/output/final_scenes/")
+
 parser.add_argument('--test_path',type=str,default="test/ours_20000")
 parser.add_argument("--executable",type=str,default="/data/bart/4DGaussians/scripts/align_eval_trajs.py")
 args = parser.parse_args()
@@ -15,6 +17,7 @@ output_dirs = natsort.natsorted(glob.glob(os.path.join(args.output,"**")))
 # filter out non directories
 output_dirs = [x for x in output_dirs if os.path.isdir(x)]
 scenes = [x.split("/")[-1] for x in output_dirs]
+
 output_dirs = [os.path.join(x,args.test_path) for x in output_dirs]
 trajs_paths = [os.path.join(x,"all_trajs.npz") for x in output_dirs]
 
