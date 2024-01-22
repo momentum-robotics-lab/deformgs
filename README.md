@@ -22,7 +22,7 @@ docker build -f md_splatting.dockerfile -t md_splatting .
 
 If you don't want to build the docker image, you can pull a pre-built image from docker hub:
 ```
-docker pull bartduis/4dgausians:latest
+docker pull bartduis/md_splatting:latest
 ```
 
 Now create a container from the image and run it.
