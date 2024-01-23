@@ -5,6 +5,6 @@ export isometry=0.316227766
 
 port=6027 
 
-python3 render_experimental.py --model_path "output/mimic/mimic_1_2_demonstrations" --skip_train \
-        --configs arguments/mdnerf-dataset/cube.py --view_skip 10 --time_skip 1 --log_deform 
+python3 render_experimental.py --model_path "output/mimic/mimic_1_2_demonstrations" --skip_video \
+        --configs arguments/mdnerf-dataset/cube.py --view_skip 50  --time_skip 9 --log_deform --show_flow --flow_skip 10
  
