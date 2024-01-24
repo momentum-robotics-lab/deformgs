@@ -48,6 +48,18 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     Rt = np.linalg.inv(C2W)
     return np.float32(Rt)
 
+def getWorld2View2Panopto(R, t):
+    Rt = np.eye(4)
+    Rt[:3, :3] = R.transpose()
+    Rt[:3, 3] = -Rt[:3, :3] @ t
+
+    Rt[1] *= -1
+    Rt[2] *= -1
+
+    return np.float32(Rt)
+
+
+
 def getProjectionMatrix(znear, zfar, fovX, fovY):
     tanHalfFovY = math.tan((fovY / 2))
     tanHalfFovX = math.tan((fovX / 2))

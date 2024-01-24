@@ -12,13 +12,13 @@
 import torch
 from torch import nn
 import numpy as np
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix, getProjectionMatrixPanopto
+from utils.graphics_utils import getWorld2View2, getProjectionMatrix, getProjectionMatrixPanopto, getWorld2View2Panopto
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", time = 0,
-                 view_id = None, time_id = None, flow = None, c_x = None, c_y = None, f_x = None, f_y = None, width=None, height=None
+                 view_id = None, time_id = None, flow = None, c_x = None, c_y = None, f_x = None, f_y = None, width=None, height=None,image_path=None
                  ):
         super(Camera, self).__init__()
 
@@ -40,6 +40,7 @@ class Camera(nn.Module):
         self.c_y = c_y
         self.width = width
         self.height = height
+        self.image_path = image_path
 
         try:
             self.data_device = torch.device(data_device)
@@ -72,22 +73,28 @@ class Camera(nn.Module):
 
         self.trans = trans
         self.scale = scale
-
-        self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1)
+        
+    
+        if self.f_x is None:
+            self.world_view_transform = torch.tensor(getWorld2View2(R, T, trans, scale)).transpose(0, 1)
+        else:
+            self.world_view_transform = torch.tensor(getWorld2View2Panopto(R,T)).transpose(0,1)
+        
+        # if view_id is not None:
+        #     breakpoint()
         # .cuda()
         if f_x is None:
             self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy)
         else:
-            self.projection_matrix = getProjectionMatrixPanopto(f_x,f_y,c_x,c_y,width,height,self.znear,self.zfar)
-        
+            self.projection_matrix = getProjectionMatrixPanopto(f_x=f_x,f_y=f_y,c_x=c_x,c_y=c_y,width=width,height=height,znear=self.znear,zfar=self.zfar)
         # print(self.projection_matrix)
         # print(self.projection_matrix.shape)
 
         
         # .cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix)).squeeze(0)
-
         self.camera_center = self.world_view_transform.inverse()[3, :3]
+ 
 
 
 class MiniCam:

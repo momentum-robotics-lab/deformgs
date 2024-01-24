@@ -292,7 +292,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
     return cam_infos
 
 
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train'):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train',panopto=False):
     cam_infos = []
     
     flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
@@ -359,10 +359,16 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 cam_name = os.path.join(path, file_path)
                 # time = mapper[frame["time"]]
                 time = frame["time"]
-                matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
-                R = -np.transpose(matrix[:3,:3])
-                R[:,0] = -R[:,0]
-                T = -matrix[:3, 3]
+
+                if panopto == False:
+                    matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
+                    R = -np.transpose(matrix[:3,:3])
+                    R[:,0] = -R[:,0]
+                    T = -matrix[:3, 3]
+                else:
+                    matrix = np.array(frame["transform_matrix"])
+                    R = matrix[:3,:3]
+                    T = matrix[:3, 3]
 
                 image_path = os.path.join(path, cam_name)
                 image_name = Path(cam_name).stem
@@ -428,19 +434,19 @@ def read_timeline(path):
 def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train')
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train',panopto=True)
     
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test')
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test',panopto=True)
     print("Generating Video Transforms")
 
     video_path = os.path.join(path, "video.json")
     video_cam_infos = None
     if os.path.exists(video_path):
-        video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=1,view_skip=1,split='video')
+        video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='video',panopto=True)
 
     if video_cam_infos is None:
-        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip,view_skip=view_skip)
 
     if not eval:
         train_cam_infos.extend(test_cam_infos)
@@ -450,7 +456,7 @@ def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_sk
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 200000
+    num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     
     # We create random points inside the bounds of the synthetic Blender scenes
@@ -498,7 +504,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 200000
+    num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     
     # We create random points inside the bounds of the synthetic Blender scenes
@@ -628,7 +634,7 @@ def readdynerfInfo(datadir,use_bg_points,eval):
     # create pcd
     # if not os.path.exists(ply_path):
     # Since this data set has no colmap data, we start with random points
-    num_pts = 200000
+    num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     threshold = 3
     # xyz_max = np.array([1.5*threshold, 1.5*threshold, 1.5*threshold])

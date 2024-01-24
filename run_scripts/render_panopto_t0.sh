@@ -5,4 +5,4 @@ export LAMBDA_ISOMETRIC=0.1
 export DATA_LOCATION="data/panopto/basketball_dnerf"
 # export DATA_LOCATION="data/final_scenes/scene_1/"
 
-python3 render_experimental.py --model_path "output/panopto/basketball"  --configs arguments/mdnerf-dataset/cube.py --view_skip 10 --time_skip 1 --log_deform 
+python3 render_experimental.py --model_path "output/panopto/basketball"  --configs arguments/mdnerf-dataset/cube.py --view_skip 1 --time_skip 10000 
