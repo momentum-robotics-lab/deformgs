@@ -285,12 +285,16 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
         frames = contents["frames"]
         
+        unique_times = np.unique([frame["time"] for frame in frames])
+        unique_transforms = np.unique(np.stack([np.array(frame["transform_matrix"]) for frame in frames]),axis=0)
+
         if time_skip is not None:
             # find all unique timesteps
-            unique_times = np.unique([frame["time"] for frame in frames])
+            
             kept_times = unique_times[::time_skip]
 
 
+        
         for idx, frame in tqdm(enumerate(frames),total=len(frames)):
             
             time = frame["time"]
@@ -307,8 +311,14 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     file_name = file_name.split(".")[0]
                 
                 # format is r_viewid_timeid
-                view_id = int(file_name.split("_")[-2])
-                time_id = int(file_name.split("_")[-1])
+                
+                if len(file_name.split("_")) > 2:
+                    view_id = int(file_name.split("_")[-2])
+                    time_id = int(file_name.split("_")[-1])
+                else:
+                    # compute view_id and time_id based on unique transforms and times
+                    view_id = np.where(np.all(unique_transforms == np.array(frame["transform_matrix"]),axis=1))[0][0]
+                    time_id = np.where(unique_times == frame["time"])[0][0]
                 
                 if view_skip is not None:
                     if view_id % view_skip != 0:
