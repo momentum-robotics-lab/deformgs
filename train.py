@@ -322,24 +322,26 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             if user_args.use_wandb and stage == "fine":
                 wandb.log({"train/l_rigid":l_rigid},step=iteration)
             
-            all_shadows = torch.cat(all_shadows,0)
-            all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
+            # check if all_shadows is empty
+            if len(all_shadows) > 0:
+                all_shadows = torch.cat(all_shadows,0)
+                all_shadows_std = torch.tensor(all_shadows_std,device="cuda")
             
-            mean_shadow = all_shadows.mean()
-            shadow_std = all_shadows_std.mean()
-    
-            l_shadow_mean = mean_shadow # incentivize a lower shadow mean
-            
-            l_shadow_delta = 0.0 
-            if n_cams >= 3:
-                delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
-                delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
+                mean_shadow = all_shadows.mean()
+                shadow_std = all_shadows_std.mean()
+        
+                l_shadow_mean = mean_shadow # incentivize a lower shadow mean
                 
-                l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
-            
-            if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
-                           "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
+                l_shadow_delta = 0.0 
+                if n_cams >= 3:
+                    delta_shadow_0 = torch.linalg.norm(all_shadows[1] - all_shadows[0],dim=-1)
+                    delta_shadow_1 = torch.linalg.norm(all_shadows[2] - all_shadows[1],dim=-1)
+                    
+                    l_shadow_delta = 1.0 - 0.5 * (delta_shadow_0 + delta_shadow_1) # incentivize a higher shadow delta
+                
+                if user_args.use_wandb and stage == "fine":
+                    wandb.log({"train/shadows_mean": mean_shadow,"train/shadows_std":shadow_std,
+                            "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
         
         ## add momentum term to loss
         if user_args.lambda_momentum > 0 and stage == "fine":

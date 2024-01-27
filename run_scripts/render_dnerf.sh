@@ -2,7 +2,7 @@
 export RIGIDITY_LAMBDA=0.1
 export LAMBDA_SPRING=0.0
 # evenly space the isometric lambda values on log scale
-export ISOMETRY=0.01
+export ISOMETRY=0.3
 
 export SCENE_1="bouncingballs"
 export SCENE_2="hellwarrior"
@@ -18,11 +18,7 @@ for SCENE in $SCENE_1 $SCENE_2 $SCENE_3 $SCENE_4 $SCENE_5 $SCENE_6 $SCENE_7 $SCE
 do
     for isometry in $ISOMETRY;
     do 
-        python3 train.py -s "data/dnerf/${SCENE}" --port $port --expname "dnerf_iso_0.01/${SCENE}" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
-        --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING  --lambda_momentum 0.1  \
-         --k_nearest 5 --lambda_isometric $isometry \
-         --use_wandb --wandb_project "dnerf_${SCENE}" --wandb_name "Iso_0.01" \
-        # add one to port
-        port=$((port+1))
+        python3 render_experimental.py --model_path "output/dnerf_iso_0.01/${SCENE}" --configs arguments/mdnerf-dataset/cube.py --view_skip 1 --time_skip 1 --log_deform \
+        --show_flow --flow_skip 10
     done
 done

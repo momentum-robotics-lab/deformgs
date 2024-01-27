@@ -223,7 +223,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         return c2w
     cam_infos = []
     # generate render poses and times
-    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
+    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,80+1)[:-1]], 0)
     render_times = torch.linspace(0,maxtime,render_poses.shape[0])
     with open(os.path.join(path, template_transformsfile)) as json_file:
         template_json = json.load(json_file)
@@ -400,7 +400,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 200000
+    num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     
     # We create random points inside the bounds of the synthetic Blender scenes
