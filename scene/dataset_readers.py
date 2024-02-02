@@ -197,7 +197,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path)
     return scene_info
-def generateCamerasFromTransforms(path, template_transformsfile, extension, maxtime,time_skip=None):
+def generateCamerasFromTransforms(path, template_transformsfile, extension, maxtime,time_skip=None,single_cam_video=False):
     trans_t = lambda t : torch.Tensor([
     [1,0,0,0],
     [0,1,0,0],
@@ -223,7 +223,12 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         return c2w
     cam_infos = []
     # generate render poses and times
-    render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,80+1)[:-1]], 0)
+    n_poses = 80
+    if single_cam_video == False:
+        render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,n_poses+1)[:-1]], 0)
+    else:
+        render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.ones(n_poses)*-90 ], 0)
+
     render_times = torch.linspace(0,maxtime,render_poses.shape[0])
     with open(os.path.join(path, template_transformsfile)) as json_file:
         template_json = json.load(json_file)
@@ -375,7 +380,7 @@ def read_timeline(path):
         timestamp_mapper[time] = time/max_time_float
 
     return timestamp_mapper, max_time_float
-def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
+def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None,single_cam_video=False):
     # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
@@ -390,7 +395,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
         video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=1,view_skip=1,split='video')
 
     if video_cam_infos is None:
-        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip,single_cam_video=single_cam_video)
 
     if not eval:
         train_cam_infos.extend(test_cam_infos)

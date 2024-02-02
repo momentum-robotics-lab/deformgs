@@ -15,7 +15,7 @@ for SCENE in $SCENE_1 $SCENE_2 $SCENE_3 $SCENE_4 $SCENE_5 $SCENE_6;
 do
     for isometry in $ISOMETRY;
     do 
-        python3 train.py -s "data/final_scenes/${SCENE}" --port $port --expname "iso_ablation/${SCENE}_${isometry}" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
+        python3 train.py -s "data/final_scenes/${SCENE}" --port $port --expname "shadow_ablation/${SCENE}" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
         --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING  --lambda_momentum 0.1 --use_wandb --wandb_project "shadow_ablation_${SCENE}" --no_shadow \
         --wandb_name "no_shadow" --k_nearest 5 --lambda_isometric $isometry
         # add one to port

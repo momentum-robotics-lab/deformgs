@@ -597,7 +597,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--lambda_w",default=2000,type=float)
     parser.add_argument("--k_nearest",default=20,type=int)
-
+    parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
     args = parser.parse_args(sys.argv[1:])
     
     if args.use_wandb:

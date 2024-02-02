@@ -8,6 +8,7 @@ import copy
 parser = argparse.ArgumentParser()
 parser.add_argument('--folder',type=str,required=True)
 parser.add_argument('--densify',action='store_true')
+parser.add_argument('--single_cam',action='store_true',help='Only render from the first camera')
 args = parser.parse_args()
 
 json_file = os.path.join(args.folder,'transforms_test.json')
@@ -25,16 +26,23 @@ dt = 1.0/(n_poses//2-1)
 times = np.arange(0,1.0+dt,dt)
 times = np.concatenate([times,times[::-1]])
 n_times = times.shape[0]
-assert n_times == n_poses
+#assert n_times == n_poses
 
 frames = []
 final_pos = []
 for id, idx in enumerate(np.sort(idx)):
-    frame = data['frames'][idx]
-    frame['time'] = times[id]
-    frame['transform_matrix'] = data['frames'][idx]['transform_matrix']
-    frames.append(frame)
-    final_pos.append(np.array(frame['transform_matrix'])[:3,3].reshape((1,3)))
+    if args.single_cam == False:
+        frame = data['frames'][idx]
+        frame['time'] = times[id]
+        frame['transform_matrix'] = data['frames'][idx]['transform_matrix']
+        frames.append(frame)
+        final_pos.append(np.array(frame['transform_matrix'])[:3,3].reshape((1,3)))
+    else:
+        frame = data['frames'][0]
+        frame['time'] = times[id]
+        print(times[id])
+        final_pos.append(np.array(frame['transform_matrix'])[:3,3].reshape((1,3)))
+        frames.append(frame)
 
 if args.densify:
     # insert frame between every two frames that is the average time and transform matrix
@@ -69,6 +77,7 @@ json_path = os.path.join(args.folder,'video.json')
 # save json
 with open(json_path, 'w') as outfile:
     json.dump(data, outfile, indent=4)
+    print("file saved to {}".format(json_path)) 
 
 
 mean_cam_dist = np.linalg.norm(cam_positions,axis=1).mean()
@@ -87,7 +96,7 @@ ax.scatter(final_pos[:,0],final_pos[:,1],final_pos[:,2],c='b',marker='o',s=10)
 ax.set_xlabel('x [m]')
 ax.set_ylabel('y [m]')
 ax.set_zlabel('z [m]')
-ax.set_aspect('equal', adjustable='box')
+ax.set_aspect('auto', adjustable='box')
 ax.set_title('Camera Positions')
 plt.show()
 # plt.savefig(os.path.join(args.folder,'camera_positions.png'))

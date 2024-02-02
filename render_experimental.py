@@ -183,6 +183,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
         
+        view.image_height = int(view.image_height * args.scale)
+        view.image_width = int(view.image_width * args.scale)
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
@@ -242,6 +244,11 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                     # draw flow at previous frame
                     traj_img = np.ascontiguousarray(np.zeros((view.image_height,view.image_width,3)))
                     
+                    if args.tracking_window is not None:
+                        if args.tracking_window < all_trajs.shape[0]:
+                            all_trajs = all_trajs[-args.tracking_window:]
+                            all_times = all_times[-args.tracking_window:]
+
                     for j in range(all_trajs.shape[0]-1):
 
                         prev_gaussians = all_trajs[j]
@@ -262,8 +269,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                                 # draw arrow from prev_projections to current_projections
                                 color_idx = (i//args.flow_skip) % len(colors)
                                 if prev_mask[i] and opacity_mask[i]:
-                                    traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
-                                
+                                    #traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
+                                    # draw teh same but a line
+                                    traj_img = cv2.line(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
                 rendering[traj_img > 0] = traj_img[traj_img > 0]
                 prev_projections = current_projections
                 prev_mask = current_mask
@@ -305,7 +313,7 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
     gt = None
     if os.path.exists(gt_path):
         gt = np.load(gt_path)['traj']
-    
+        print("loaded gt from {}".format(gt_path)) 
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False,user_args=user_args)
@@ -347,6 +355,9 @@ if __name__ == "__main__":
     parser.add_argument("--show_flow",action="store_true")
     parser.add_argument("--flow_skip",type=int,default=1)
     parser.add_argument("--no_shadow",action="store_true")
+    parser.add_argument("--scale",type=float,default=1.0)
+    parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
+    parser.add_argument("--tracking_window",type=int,default=None)
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)

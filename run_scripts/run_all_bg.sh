@@ -11,8 +11,8 @@ export SCENE_5="scene_5"
 export SCENE_6="scene_6"
 
 port=6027 
-# for SCENE in $SCENE_2 $SCENE_3 $SCENE_4 $SCENE_5 $SCENE_6;
-for SCENE in $SCENE_1;
+#for SCENE in $SCENE_2 $SCENE_3 $SCENE_4 $SCENE_5 $SCENE_6;
+for SCENE in $SCENE_3;
 do
     for isometry in $ISOMETRY;
     do 
