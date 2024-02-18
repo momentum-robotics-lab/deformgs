@@ -270,6 +270,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # compute knn_dists [N,3] distance to KNN
                 means_3D_deform = all_means_3D_deform[i,:,:]
                 knn_points = means_3D_deform[o3d_knn_indices]
+
                 knn_points = knn_points.reshape(-1,3) # N x 3
                 means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,args.k_nearest,1).reshape(-1,3) # N x 3
 
@@ -280,9 +281,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # print(knn_dists.shape)
                 # exit()
                 
-                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+                #l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
 
+                l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
                 if prev_knn_dists is not None:
+                    #l_spring_tmp = torch.mean(torch.exp(100*torch.abs(knn_dists - prev_knn_dists))-1.0)
                     l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
                     all_l_spring.append(l_spring_tmp)
                 
