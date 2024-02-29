@@ -59,6 +59,7 @@ class GaussianModel:
         self.xyz_gradient_accum = torch.empty(0)
         self.denom = torch.empty(0)
         self.optimizer = None
+        self.all_times = None
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self._deformation_table = torch.empty(0)

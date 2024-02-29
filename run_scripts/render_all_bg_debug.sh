@@ -17,8 +17,8 @@ do
     for isometry in $ISOMETRY;
     do 
 
-        python3 render_experimental.py --model_path "output/final_scenes_bg_20m_range_exp_iso/${SCENE}_l1_velocity_1.0" --configs arguments/mdnerf-dataset/cube.py --skip_train --skip_video --view_skip 50 --time_skip 1 --log_deform \
-        --show_flow --flow_skip 100 --tracking_window 100 --scale 1 --no_gt
+        python3 render_experimental.py --model_path "output/final_scenes_bg_20m_range_exp_iso/${SCENE}_l1_velocity_0.1_momentum" --configs arguments/mdnerf-dataset/cube.py --skip_train --skip_video --view_skip 200 --time_skip 1 --log_deform \
+        --flow_skip 100 --tracking_window 100 --scale 1 --no_gt --viz_velocities 
         # add one to port
         port=$((port+1))
     done

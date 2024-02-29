@@ -16,7 +16,7 @@ import os
 import cv2
 from tqdm import tqdm
 from os import makedirs
-from gaussian_renderer import render
+from gaussian_renderer import render, get_all_pos
 import torchvision
 from utils.general_utils import safe_state
 from argparse import ArgumentParser
@@ -129,7 +129,7 @@ def find_closest_gauss(gt,gauss):
     dists = torch.norm(gt-gauss,dim=-1)
     return torch.argmin(dists,dim=0).cpu().numpy()
 
-def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None,gt=None):
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None,gt=None,force_colors=None):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
@@ -186,7 +186,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         view.image_height = int(view.image_height * args.scale)
         view.image_width = int(view.image_width * args.scale)
 
-        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow)
+        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
 
         if opacities is None:
@@ -198,7 +198,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         depth = render_pkg["depth"].to("cpu").numpy()
             
         depth[depth < depth_dist_threshold] = 10e3  # set small depth to a large value for visualization purposes
-        
+
+        if args.no_gt:
+            gt = None
+
         if gt_idxs is None:
             if gt is not None:
                 gt_t0 = gt[0]
@@ -307,6 +310,39 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             count +=1
     
     imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), video_imgs, fps=30, quality=8)
+
+
+def signal_to_colors(signal,mode='minmax',threshold=None):
+    # signal: N_gaussians torch tensor
+    # output: N_gaussians x 3 torch tensor
+    # normalize signal
+    if threshold is not None:
+        signal[signal < threshold] = 0.0
+        signal[signal >= threshold] = 1.0
+        breakpoint()
+    else:
+        if mode == 'minmax':
+            signal = (signal - torch.min(signal)) / (torch.max(signal) - torch.min(signal))
+        elif mode == 'meanstd':
+            signal = (signal - torch.mean(signal)) / torch.std(signal) + 0.5
+            # clip
+            signal = torch.clamp(signal,0,1)
+
+    signal = signal.unsqueeze(1).repeat(1,3)
+
+    return signal
+
+
+def compute_velocities(gaussians):
+    all_pos = get_all_pos(gaussians) # N_gaussians x N_times x 3 torch tensor
+
+    # compute average velocity for each gaussian
+    velocities = all_pos[:,1:] - all_pos[:,:-1] # N_gaussians x N_times-1 x 3
+    velocities = torch.norm(velocities,dim=-1) # N_gaussians x N_times-1
+    velocities = torch.sum(velocities,dim=-1) # N_gaussians
+
+    return velocities
+
 def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, skip_video: bool,log_deform=False,user_args=None):
     
     gt_path = os.path.join(dataset.source_path, "gt.npz")
@@ -318,18 +354,26 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False,user_args=user_args)
 
+        force_colors = None
+        if args.viz_velocities:
+            velocities = compute_velocities(gaussians)
+            force_colors = signal_to_colors(velocities,mode='meanstd')
+
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
         if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args,gt=gt)
+            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, 
+                       background,log_deform=log_deform,args=user_args,gt=gt,force_colors=force_colors)
         if not skip_test:
             log_folder = os.path.join(args.model_path, "test", "ours_{}".format(scene.loaded_iter))
             delete_previous_deform_logs(log_folder)
-            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,log_deform=log_deform,args=user_args,gt=gt) 
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline,
+                       background,log_deform=log_deform,args=user_args,gt=gt,force_colors=force_colors) 
             if user_args.log_deform:
                 merge_deform_logs(log_folder)           
         if not skip_video:
-            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,background,log_deform=log_deform,args=user_args,gt=gt)
+            render_set(dataset.model_path,"video",scene.loaded_iter,scene.getVideoCameras(),gaussians,pipeline,
+                       background,log_deform=log_deform,args=user_args,gt=gt,force_colors=force_colors)
  
 def delete_previous_deform_logs(folder):
     npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
@@ -358,6 +402,8 @@ if __name__ == "__main__":
     parser.add_argument("--scale",type=float,default=1.0)
     parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
     parser.add_argument("--tracking_window",type=int,default=None)
+    parser.add_argument("--no_gt",action="store_true")
+    parser.add_argument("--viz_velocities",action="store_true")
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)

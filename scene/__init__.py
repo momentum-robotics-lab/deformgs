@@ -61,6 +61,8 @@ class Scene:
         else:
             assert False, "Could not recognize scene type!"
         self.maxtime = scene_info.maxtime
+        gaussians.all_times = scene_info.all_times
+
         # if not self.loaded_iter:
         #     with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
         #         dest_file.write(src_file.read())

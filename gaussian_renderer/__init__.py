@@ -34,6 +34,53 @@ def get_pos_t0(pc:GaussianModel):
     
     return means3D_final
 
+
+def get_all_pos(pc:GaussianModel):
+    """
+    Returns a trajectory for each Gaussian in the scene
+    Output: (N_gaussians, N_frames, 3)
+    """
+    means3D = pc.get_xyz
+    scales = pc._scaling
+    rotations = pc._rotation
+    opacity = pc._opacity
+    deformation_point = pc._deformation_table
+
+    n_gaussians = means3D.shape[0]
+    all_times = pc.all_times
+    n_times = len(all_times)
+
+    # generate the time tensor, (N_frames x N_gaussians, 1) and cast to same dtype as means3D
+    time = torch.tensor(all_times).to(means3D.device).reshape(-1,1)
+    time= time.repeat(n_gaussians,1)
+    # cast to dtype of means3D
+    time = time.to(means3D.dtype)
+    # sort time
+    time, _ = time.sort(dim=0)
+    
+    
+    #also repeat the other tensors
+    means3D = means3D.repeat(n_times,1)
+    scales = scales.repeat(n_times,1)
+    rotations = rotations.repeat(n_times,1)
+    opacity = opacity.repeat(n_times,1)
+    deformation_point = deformation_point.repeat(n_times)
+    
+    means3D_deformed, _, _, _, _ =  pc._deformation(means3D[deformation_point], scales[deformation_point],
+                                                                            rotations[deformation_point], opacity[deformation_point],
+                                                                            time[deformation_point])
+    means3D_final = torch.zeros_like(means3D)
+    means3D_final[deformation_point] =  means3D_deformed
+    means3D_final[~deformation_point] = means3D[~deformation_point]
+    means3D_final = means3D_final.reshape(n_times,n_gaussians,3)
+    # cast to (N_gaussians x N_frames x 3)
+    means3D_final = means3D_final.permute(1,0,2)
+
+
+    return means3D_final
+
+
+
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
     """
     Render the scene. 
@@ -141,7 +188,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     shs = None
     colors_precomp = None
 
-    if no_shadow:
+    if no_shadow or override_color is not None:
         shadow_scalars = None
     if override_color is None:
         if shadow_scalars is not None: # we compute colors in python to multiply with our shadow scalars

@@ -53,6 +53,7 @@ class SceneInfo(NamedTuple):
     nerf_normalization: dict
     ply_path: str
     maxtime: int
+    all_times: np.array = None
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -389,6 +390,11 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test')
     print("Generating Video Transforms")
 
+    # computing all times used 
+    all_times = [train_cam.time for train_cam in train_cam_infos] + [test_cam.time for test_cam in test_cam_infos]
+    all_times = np.unique(all_times)
+    all_times = np.sort(all_times)
+
     video_path = os.path.join(path, "video.json")
     video_cam_infos = None
     if os.path.exists(video_path):
@@ -425,7 +431,8 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
                            video_cameras=video_cam_infos,
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path,
-                           maxtime=max_time
+                           maxtime=max_time,
+                           all_times=all_times
                            )
     return scene_info
 def format_infos(dataset,split):
