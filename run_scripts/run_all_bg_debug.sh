@@ -18,8 +18,8 @@ do
     for isometry in $ISOMETRY;
     do 
         python3 train.py -s "data/final_scenes_bg/${SCENE}" --port $port --expname "final_scenes_bg_20m_range_exp_iso/${SCENE}_l1_velocity" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
-        --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING  --lambda_momentum 0.0 \
-        --k_nearest 5 --lambda_isometric $isometry --time_skip 1 --view_skip 20 --reg_iter 1 --no_coarse --lambda_velocity $LAMBDA_VELOCITY
+        --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING  --lambda_momentum 0.0 --staticfying_from 1 \
+        --k_nearest 5 --lambda_isometric $isometry --time_skip 1 --view_skip 50 --reg_iter 1 --lambda_velocity $LAMBDA_VELOCITY --coarse_t0 --no_coarse
         # add one to port
         port=$((port+1))
     done

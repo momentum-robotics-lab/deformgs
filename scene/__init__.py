@@ -96,6 +96,8 @@ class Scene:
             print("Loading Training Cameras, MDNeRF")
             self.train_camera = MDNerfDataset(scene_info.train_cameras, args)
             
+            self.train_camera_t0 = MDNerfDataset(scene_info.train_cameras, args, only_t0=True)
+
             print("Loading Test Cameras, MDNeRF")
             self.test_camera = MDNerfDataset(scene_info.test_cameras, args)
             
@@ -146,6 +148,9 @@ class Scene:
         self.gaussians.save_deformation(point_cloud_path)
     def getTrainCameras(self, scale=1.0):
         return self.train_camera
+    
+    def getTrainCamerasT0(self, scale=1.0):
+        return self.train_camera_t0
 
     def getTestCameras(self, scale=1.0):
         return self.test_camera

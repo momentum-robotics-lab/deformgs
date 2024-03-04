@@ -27,6 +27,7 @@ import glob
 import matplotlib.pyplot as plt
 from colormap import colormap
 import seaborn as sns
+from utils.external import *
 
 tonumpy = lambda x : x.cpu().numpy()
 to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
@@ -317,9 +318,10 @@ def signal_to_colors(signal,mode='minmax',threshold=None):
     # output: N_gaussians x 3 torch tensor
     # normalize signal
     if threshold is not None:
-        signal[signal < threshold] = 0.0
-        signal[signal >= threshold] = 1.0
-        breakpoint()
+        signal_thresh = signal.clone()
+        signal_thresh[signal < threshold] = 1.0
+        signal_thresh[signal >= threshold] = 0.0
+        signal = signal_thresh
     else:
         if mode == 'minmax':
             signal = (signal - torch.min(signal)) / (torch.max(signal) - torch.min(signal))
@@ -332,6 +334,37 @@ def signal_to_colors(signal,mode='minmax',threshold=None):
 
     return signal
 
+def compute_isometry(gaussians,k_nearest=5,exp=False):
+    all_pos = get_all_pos(gaussians) # N_gaussians x N_times x 3 torch tensor
+    t_0_pts = all_pos[:,0].detach().cpu().numpy() # N_gaussians x 3 torch tensor
+    o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, k_nearest)
+    o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
+    o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+  
+    all_pos = all_pos.permute(1,0,2) # N_times x N_gaussians x 3 torch tensor
+    all_gaussians_iso = torch.zeros(all_pos.shape[1],device="cuda")
+
+    # o3d_knn_indices : N_gaussians x k_nearest
+    # compute distance to each nearest neighbor in each time step
+    for i in range(all_pos.shape[0]):
+       knn_points = all_pos[i][o3d_knn_indices]
+       knn_points = knn_points.reshape(-1,3)
+
+       means_3D_deform_repeated = all_pos[i].unsqueeze(1).repeat(1,k_nearest,1).reshape(-1,3) # N x 3 
+       curr_offsets = knn_points - means_3D_deform_repeated
+       knn_dists = torch.linalg.norm(curr_offsets,dim=-1)  
+
+       iso_dists = torch.abs(knn_dists - o3d_knn_dists)
+
+       if exp:
+            iso_dists = torch.exp(10*iso_dists)-1.0
+
+       # reshape back to N_gaussians x k_nearest
+       iso_dists = iso_dists.reshape(-1,k_nearest) 
+       iso_dists = torch.sum(iso_dists,dim=-1)
+       all_gaussians_iso += iso_dists
+    
+    return all_gaussians_iso
 
 def compute_velocities(gaussians):
     all_pos = get_all_pos(gaussians) # N_gaussians x N_times x 3 torch tensor
@@ -357,7 +390,10 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
         force_colors = None
         if args.viz_velocities:
             velocities = compute_velocities(gaussians)
-            force_colors = signal_to_colors(velocities,mode='meanstd')
+            force_colors = signal_to_colors(velocities,threshold=0.1)
+        if args.viz_isometry:
+            isometry = compute_isometry(gaussians,exp=True)
+            force_colors = signal_to_colors(isometry,threshold=50)
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -404,6 +440,7 @@ if __name__ == "__main__":
     parser.add_argument("--tracking_window",type=int,default=None)
     parser.add_argument("--no_gt",action="store_true")
     parser.add_argument("--viz_velocities",action="store_true")
+    parser.add_argument("--viz_isometry",action="store_true")
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)

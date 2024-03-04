@@ -13,15 +13,14 @@ export SCENE_5="scene_5"
 export SCENE_6="scene_6"
 
 port=6027 
-#for SCENE in $SCENE_1 $SCENE_5 $SCENE_6 $SCENE_4 $SCENE_3 $SCENE_2 ;
-for SCENE in $SCENE_3 $SCENE_2 $SCENE_4;
+for SCENE in $SCENE_1 $SCENE_5 $SCENE_6 $SCENE_4 $SCENE_3 $SCENE_2 ;
 #for SCENE in $SCENE_1;
 do
     for isometry in $ISOMETRY;
     do 
-        python3 train.py -s "data/final_scenes_bg/${SCENE}" --port $port --expname "final_scenes_bg_20m_range_exp_iso/${SCENE}_iso_static_simple_15" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
+        python3 train.py -s "data/final_scenes_bg/${SCENE}" --port $port --expname "final_scenes_bg_20m_range_exp_iso/${SCENE}_no_vel_reg" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 \
         --lambda_rigidity $RIGIDITY_LAMBDA --lambda_spring $LAMBDA_SPRING  --lambda_momentum $LAMBDA_MOMENTUM --lambda_velocity $LAMBDA_VELOCITY \
-        --use_wandb --wandb_project "final_${SCENE}_bg"  --wandb_name "iso_static_simple_15" --k_nearest 5 --lambda_isometric $isometry --time_skip 1 
+        --use_wandb --wandb_project "final_${SCENE}_bg"  --wandb_name "no_vel_reg" --k_nearest 5 --lambda_isometric $isometry --time_skip 1 --coarse_t0
         # add one to port
         port=$((port+1))
     done

@@ -26,6 +26,7 @@ from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHidd
 from torch.utils.data import DataLoader
 from utils.timer import Timer
 from utils.external import *
+from utils.md_utils import *
 import wandb 
 # import pytorch3d.transforms as transforms
  
@@ -140,7 +141,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         # Pick a random Camera
         if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras()
+            if user_args.coarse_t0 and stage == "coarse":
+                viewpoint_stack = scene.getTrainCamerasT0()
+            else:
+                viewpoint_stack = scene.getTrainCameras()
+
             batch_size = 1
             viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,shuffle=True,num_workers=32,collate_fn=list)
             loader = iter(viewpoint_stack_loader)
@@ -154,7 +159,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         else:
             idx = randint(0, len(viewpoint_stack)-1) # picking a random viewpoint
             viewpoint_cams = viewpoint_stack[idx] # returning 3 subsequence timesteps
-
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -290,6 +294,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 #l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
 
                 l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
+                # check if l_iso_tmp is nan 
+                if torch.isnan(l_iso_tmp):
+                    l_iso_tmp = torch.mean(torch.abs(knn_dists - o3d_knn_dists))
+                    if torch.isnan(l_iso_tmp):
+                        l_iso_tmp = 0.0
+                
                 if prev_knn_dists is not None:
                     #l_spring_tmp = torch.mean(torch.exp(100*torch.abs(knn_dists - prev_knn_dists))-1.0)
                     l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
@@ -445,6 +455,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 else:    
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
+
+                if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
+                    isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
+                    #velocities = compute_velocities(gaussians)
+                    velocities = None
+                    gaussians.staticfying(isometry=isometry,velocities=velocities,isometry_threshold=15.0,velocity_threshold=0.1) 
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
@@ -617,6 +633,12 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_w",default=2000,type=float)
     parser.add_argument("--k_nearest",default=20,type=int)
     parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
+    parser.add_argument("--coarse_t0",action="store_true")
+
+    parser.add_argument("--staticfying_from",default=10000,type=int)
+    parser.add_argument("--staticfying_until",default=15000,type=int)
+    parser.add_argument("--staticfying_interval",default=100,type=int) 
+
     args = parser.parse_args(sys.argv[1:])
     
     if args.use_wandb:
@@ -634,7 +656,7 @@ if __name__ == "__main__":
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-
+    torch.cuda.synchronize() # makes dataloader go brr brr
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
