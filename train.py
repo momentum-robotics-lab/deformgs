@@ -291,9 +291,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # print(knn_dists.shape)
                 # exit()
                 
-                #l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
 
-                l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
+                #l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
                 # check if l_iso_tmp is nan 
                 if torch.isnan(l_iso_tmp):
                     l_iso_tmp = torch.mean(torch.abs(knn_dists - o3d_knn_dists))

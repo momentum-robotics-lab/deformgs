@@ -12,13 +12,13 @@ export SCENE_6="scene_6"
 
 port=6027 
 #for SCENE in $SCENE_1 $SCENE_2 $SCENE_3 $SCENE_4 $SCENE_5 $SCENE_6;
-for SCENE in $SCENE_3 ;
+for SCENE in $SCENE_3  ;
 do
     for isometry in $ISOMETRY;
     do 
 
-        python3 render_experimental.py --model_path "output/final_scenes_bg_20m_range_exp_iso/${SCENE}_no_vel_reg" --configs arguments/mdnerf-dataset/cube.py --skip_train --skip_video --view_skip 200 --time_skip 1  \
-        --flow_skip 10 --tracking_window 100 --scale 1 --show_flow --no_gt 
+        python3 render_experimental.py --model_path "output/final_scenes_bg_20m_range_exp_iso/${SCENE}_iso_static_simple_15_linear_iso" --configs arguments/mdnerf-dataset/cube.py --skip_train --skip_video --view_skip 200 --time_skip 1  \
+        --flow_skip 1 --tracking_window 100 --scale 1 --show_flow  
         # add one to port
         port=$((port+1))
     done
