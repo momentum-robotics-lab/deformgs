@@ -173,7 +173,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_opacities = []
         all_shadows = []
         all_shadows_std = []
-        
+
         for viewpoint_cam in viewpoint_cams:
             
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
@@ -291,7 +291,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # print(knn_dists.shape)
                 # exit()
                 
-                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+                l_iso_tmp = torch.mean(torch.abs(knn_dists-o3d_knn_dists))
 
                 #l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
                 # check if l_iso_tmp is nan 

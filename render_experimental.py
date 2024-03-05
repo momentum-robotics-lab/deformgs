@@ -162,7 +162,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     arrow_color = (0,255,0)
     arrow_tickness = 1
     raddii_threshold = 0
-    opacity_threshold = -10e10 # disabling this effectively
+    #opacity_threshold = -10e10 # disabling this effectively
+    opacity_threshold = 0.005
     depth_dist_threshold = 1.0
     
     opacities = None
@@ -393,7 +394,7 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
             force_colors = signal_to_colors(velocities,threshold=0.1)
         if args.viz_isometry:
             isometry = compute_isometry(gaussians,exp=True)
-            force_colors = signal_to_colors(isometry,threshold=50)
+            force_colors = signal_to_colors(isometry,threshold=15)
 
         bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")

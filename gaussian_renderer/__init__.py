@@ -52,7 +52,7 @@ def get_all_pos(pc:GaussianModel):
 
     # generate the time tensor, (N_frames x N_gaussians, 1) and cast to same dtype as means3D
     time = torch.tensor(all_times).to(means3D.device).reshape(-1,1)
-    time= time.repeat(n_gaussians,1)
+    time = time.repeat(n_gaussians,1)
     # cast to dtype of means3D
     time = time.to(means3D.dtype)
     # sort time
@@ -151,9 +151,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
                                                                          time[deformation_point],shadow_only=True)    
 
     else:
-        # means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
-        #                                                                  rotations[deformation_point], opacity[deformation_point],
-        #                                                                  time[deformation_point])
         if deformation_point.sum() > 0:
             means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
@@ -180,7 +177,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     rotations_final = torch.zeros_like(rotations)
     scales_final = torch.zeros_like(scales)
     opacity_final = torch.zeros_like(opacity)
-    shadow_scalars_final = torch.ones_like(opacity)
+    shadow_scalars_final = torch.ones_like(opacity_final)
 
     means3D_final[deformation_point] =  means3D_deform
     rotations_final[deformation_point] =  rotations_deform
@@ -230,6 +227,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         # colors_precomp = [N,3]
         # element-wise multiplication
         colors_precomp = colors_precomp * shadow_scalars_final.repeat(1,3)
+        #colors_precomp = colors_precomp * shadow_scalars_final
+
     mask = torch.gt(torch.ones_like(opacity_final), 0.0)
     if split is not None:
         if split == "static":
