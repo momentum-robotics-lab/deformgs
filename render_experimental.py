@@ -92,7 +92,7 @@ def project(means3D_deform,viewpoint_camera):
 def get_mask(projections=None,gaussian_positions=None,depth=None,cam_center=None,height=800,width=800,depth_threshold=0.2):
     if depth.ndim == 3:
         depth = depth[0]
-
+    depth_threshold = 1.0
 
     # assert none 
     assert projections is not None

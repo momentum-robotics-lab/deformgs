@@ -42,7 +42,7 @@ def main(args):
         print("Saving GIF animation...")
         # make a GIF animation
         duration = 1000.0/args.fps
-        imageio.mimsave(os.path.join(base_dir, 'animation.GIF'), imgs, duration=duration)
+        imageio.mimsave(os.path.join(base_dir, 'animation.GIF'), imgs, duration=duration, loop=0)
         print("Done!")
 
 
