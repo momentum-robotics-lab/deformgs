@@ -34,7 +34,58 @@ def get_pos_t0(pc:GaussianModel):
     
     return means3D_final
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False):
+
+def get_all_pos(pc:GaussianModel):
+    """
+    Returns a trajectory for each Gaussian in the scene
+    Output: (N_gaussians, N_frames, 3)
+    """
+    means3D = pc.get_xyz
+    scales = pc._scaling
+    rotations = pc._rotation
+    opacity = pc._opacity
+    deformation_point = pc._deformation_table
+
+    n_gaussians = means3D.shape[0]
+    all_times = pc.all_times
+    n_times = len(all_times)
+
+    # generate the time tensor, (N_frames x N_gaussians, 1) and cast to same dtype as means3D
+    time = torch.tensor(all_times).to(means3D.device).reshape(-1,1)
+    time = time.repeat(n_gaussians,1)
+    # cast to dtype of means3D
+    time = time.to(means3D.dtype)
+    # sort time
+    time, _ = time.sort(dim=0)
+    
+    
+    #also repeat the other tensors
+    means3D = means3D.repeat(n_times,1)
+    scales = scales.repeat(n_times,1)
+    rotations = rotations.repeat(n_times,1)
+    opacity = opacity.repeat(n_times,1)
+    deformation_point = deformation_point.repeat(n_times)
+
+    if deformation_point.sum() > 0: 
+        means3D_deformed, _, _, _, _ =  pc._deformation(means3D[deformation_point], scales[deformation_point],
+                                                                                rotations[deformation_point], opacity[deformation_point],
+                                                                                time[deformation_point])
+    else:
+        means3D_deformed = means3D[deformation_point]
+
+    means3D_final = torch.zeros_like(means3D)
+    means3D_final[deformation_point] =  means3D_deformed
+    means3D_final[~deformation_point] = means3D[~deformation_point]
+    means3D_final = means3D_final.reshape(n_times,n_gaussians,3)
+    # cast to (N_gaussians x N_frames x 3)
+    means3D_final = means3D_final.permute(1,0,2)
+
+
+    return means3D_final
+
+
+
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None):
     """
     Render the scene. 
     
@@ -92,32 +143,42 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = pc._rotation
     deformation_point = pc._deformation_table
     shadow_scalars = None
+    shadow_scalars_static = None
     if stage == "coarse" :
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
+        shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
+                                                                         rotations[deformation_point], opacity[deformation_point],
+                                                                         time[deformation_point],shadow_only=True)    
+
     else:
-        # means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
-        #                                                                  rotations[deformation_point], opacity[deformation_point],
-        #                                                                  time[deformation_point])
-        means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
+        if deformation_point.sum() > 0:
+            means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
                                                                          time[deformation_point])        
 
-        scales_deform, opacity_deform = scales, opacity 
-        # scales_deform = scales
+            scales_deform, opacity_deform = scales[deformation_point], opacity[deformation_point] 
+        else:
+            means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D[deformation_point], scales[deformation_point], rotations[deformation_point], opacity[deformation_point]
+            shadow_scalars = None
 
+        # scales_deform = scales
+        if (~deformation_point).sum() > 0:
+            shadow_scalars_static = pc._deformation(means3D[~deformation_point], scales[~deformation_point],
+                                                                         rotations[~deformation_point], opacity[~deformation_point],
+                                                                         time[~deformation_point],shadow_only=True)
         
 
 
     # print(time.max())
-    with torch.no_grad():
-        pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
+    #with torch.no_grad():
+        #pc._deformation_accum[deformation_point] += torch.abs(means3D_deform-means3D[deformation_point])
 
- 
-    
     means3D_final = torch.zeros_like(means3D)
     rotations_final = torch.zeros_like(rotations)
     scales_final = torch.zeros_like(scales)
     opacity_final = torch.zeros_like(opacity)
+    shadow_scalars_final = torch.ones_like(opacity_final)
+
     means3D_final[deformation_point] =  means3D_deform
     rotations_final[deformation_point] =  rotations_deform
     scales_final[deformation_point] =  scales_deform
@@ -126,6 +187,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     rotations_final[~deformation_point] = rotations[~deformation_point]
     scales_final[~deformation_point] = scales[~deformation_point]
     opacity_final[~deformation_point] = opacity[~deformation_point]
+    
+
+    if shadow_scalars is not None:
+        shadow_scalars_final[deformation_point] = shadow_scalars
+    if shadow_scalars_static is not None:
+        shadow_scalars_final[~deformation_point] = shadow_scalars_static
 
     
     if log_deform_path is not None:
@@ -141,10 +208,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     shs = None
     colors_precomp = None
 
-    if no_shadow:
+    if no_shadow or override_color is not None:
         shadow_scalars = None
     if override_color is None:
-        if shadow_scalars is not None: # we compute colors in python to multiply with our shadow scalars
+        if shadow_scalars_final is not None: # we compute colors in python to multiply with our shadow scalars
             shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
             dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.cuda().repeat(pc.get_features.shape[0], 1))
             dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
@@ -159,21 +226,32 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         # shadow_scalars = [N,1]
         # colors_precomp = [N,3]
         # element-wise multiplication
-        colors_precomp = colors_precomp * shadow_scalars.repeat(1,3)
+        colors_precomp = colors_precomp * shadow_scalars_final.repeat(1,3)
+        #colors_precomp = colors_precomp * shadow_scalars_final
 
+    mask = torch.gt(torch.ones_like(opacity_final), 0.0)
+    if split is not None:
+        if split == "static":
+            mask[deformation_point] = False #only render the static part
+        elif split == "dynamic":
+            mask[~deformation_point] = False #only render the dynamic part
+    # flatten to [N]
+    mask = mask.flatten()    
+
+    
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii, depth = rasterizer(
-        means3D = means3D_final,
-        means2D = means2D,
+        means3D = means3D_final[mask],
+        means2D = means2D[mask],
         shs = shs,
-        colors_precomp = colors_precomp,
-        opacities = opacity,
-        scales = scales_final,
-        rotations = rotations_final,
+        colors_precomp = colors_precomp[mask],
+        opacities = opacity[mask],
+        scales = scales_final[mask],
+        rotations = rotations_final[mask],
         cov3D_precomp = cov3D_precomp)
 
     # projecting to cam frame for later use in optic flow
-    means_deform_h = torch.cat([means3D_deform,torch.ones_like(means3D_deform[:,0:1])],dim=1).T 
+    means_deform_h = torch.cat([means3D_final,torch.ones_like(means3D_final[:,0:1])],dim=1).T 
     cam_transform = viewpoint_camera.full_proj_transform.to(means_deform_h.device).T
 
     projections = cam_transform.matmul(means_deform_h)
@@ -189,9 +267,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     shadows_mean = None
     shadows_std = None
 
-    if shadow_scalars is not None:
-        shadows_mean = torch.mean(shadow_scalars)
-        shadows_std = torch.std(shadow_scalars)
+    if shadow_scalars_final is not None:
+        shadows_mean = torch.mean(shadow_scalars_final)
+        shadows_std = torch.std(shadow_scalars_final)
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
@@ -203,8 +281,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "shadows_mean":shadows_mean,    
             "shadows_std":shadows_std,
             "projections":projections_cam,
-            "rotations": rotations_deform,
+            "rotations": rotations_final,
             "opacities": opacity_final,
-            "shadows":shadow_scalars,
+            "shadows":shadow_scalars_final,
             }
 

@@ -48,7 +48,8 @@ class MDNerfDataset(Dataset):
     def __init__(
         self,
         dataset,
-        args
+        args,
+        only_t0=False
     ):
         self.dataset = dataset
         self.args = args
@@ -59,18 +60,19 @@ class MDNerfDataset(Dataset):
 
         self.n_viewpoints = len(self.viewpoint_ids)
         self.n_times = len(self.time_ids)
-        
+
+        if only_t0:
+             self.n_times = 1
+             self.time_ids = np.array([self.time_ids[0]]) 
         
         # now order data in a grid of view x time 
         self.ordered_data = np.empty((self.n_viewpoints,self.n_times),dtype=object)
         
         for data in dataset:
-            # time id is idx in self.time_ids
-            # view id is idx in self.viewpoint_ids
-            time_id = np.where(self.time_ids == data.time_id)[0][0]
-            view_id = np.where(self.viewpoint_ids == data.view_id)[0][0]
-            self.ordered_data[view_id,time_id] = data
-        
+            if data.time_id in self.time_ids and data.view_id in self.viewpoint_ids:
+                time_id = np.where(self.time_ids == data.time_id)[0][0]
+                view_id = np.where(self.viewpoint_ids == data.view_id)[0][0]
+                self.ordered_data[view_id,time_id] = data 
 
         
     def __getitem__(self, idx):

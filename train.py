@@ -26,6 +26,7 @@ from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHidd
 from torch.utils.data import DataLoader
 from utils.timer import Timer
 from utils.external import *
+from utils.md_utils import *
 import wandb 
 # import pytorch3d.transforms as transforms
  
@@ -140,7 +141,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         # Pick a random Camera
         if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras()
+            if user_args.coarse_t0 and stage == "coarse":
+                viewpoint_stack = scene.getTrainCamerasT0()
+            else:
+                viewpoint_stack = scene.getTrainCameras()
+
             batch_size = 1
             viewpoint_stack_loader = DataLoader(viewpoint_stack, batch_size=batch_size,shuffle=True,num_workers=32,collate_fn=list)
             loader = iter(viewpoint_stack_loader)
@@ -154,7 +159,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         else:
             idx = randint(0, len(viewpoint_stack)-1) # picking a random viewpoint
             viewpoint_cams = viewpoint_stack[idx] # returning 3 subsequence timesteps
-
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -169,7 +173,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_opacities = []
         all_shadows = []
         all_shadows_std = []
-        
+
         for viewpoint_cam in viewpoint_cams:
             
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
@@ -231,7 +235,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             l_deformation_mag = 0.5 * (l_deformation_mag_0 + l_deformation_mag_1)
 
-        l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring = None, None, None, None, None
+        l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring, l_velocity = None, None, None, None, None, None
         diff_dimensions = False
         if stage == "fine" and iteration > user_args.reg_iter:
             
@@ -262,6 +266,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             prev_offsets = None
             all_l_rigid = []
             prev_knn_dists = None
+            l_velocity = 0.0 
+
             for i in range(n_cams):
                 # o3d_knn_indices : [N,3], 3 nearest neighbors
                 # means_3D_deform : [N,3]
@@ -270,6 +276,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 # compute knn_dists [N,3] distance to KNN
                 means_3D_deform = all_means_3D_deform[i,:,:]
                 knn_points = means_3D_deform[o3d_knn_indices]
+
                 knn_points = knn_points.reshape(-1,3) # N x 3
                 means_3D_deform_repeated = means_3D_deform.unsqueeze(1).repeat(1,args.k_nearest,1).reshape(-1,3) # N x 3
 
@@ -277,12 +284,24 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 knn_dists = torch.linalg.norm(curr_offsets,dim=-1)
                 if args.use_wandb and stage == "fine":
                     wandb.log({"train/knn_dists":knn_dists.median()},step=iteration)
+
+                if args.lambda_velocity > 0 and i > 0:
+                    l_velocity += torch.linalg.norm(all_means_3D_deform[i,:,:] - all_means_3D_deform[i-1,:,:],dim=-1).mean()
+
                 # print(knn_dists.shape)
                 # exit()
                 
-                l_iso_tmp = torch.mean(knn_dists-o3d_knn_dists)
+                l_iso_tmp = torch.mean(torch.abs(knn_dists-o3d_knn_dists))
 
+                #l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
+                # check if l_iso_tmp is nan 
+                if torch.isnan(l_iso_tmp):
+                    l_iso_tmp = torch.mean(torch.abs(knn_dists - o3d_knn_dists))
+                    if torch.isnan(l_iso_tmp):
+                        l_iso_tmp = 0.0
+                
                 if prev_knn_dists is not None:
+                    #l_spring_tmp = torch.mean(torch.exp(100*torch.abs(knn_dists - prev_knn_dists))-1.0)
                     l_spring_tmp = torch.mean(torch.abs(knn_dists - prev_knn_dists))
                     all_l_spring.append(l_spring_tmp)
                 
@@ -309,7 +328,13 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
                 # print(knn_rotations.shape)
                 # exit()
-                
+            
+            if args.lambda_velocity > 0:
+                l_velocity = l_velocity / (n_cams-1)
+
+            if user_args.use_wandb and stage == "fine":
+                wandb.log({"train/l_velocity":l_velocity},step=iteration)
+
             l_iso = torch.mean(torch.stack(all_l_iso))
             l_spring = torch.mean(torch.stack(all_l_spring))
             if user_args.use_wandb and stage == "fine":
@@ -365,6 +390,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             
         if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
             loss += user_args.lambda_spring * l_spring.mean()
+
+        if user_args.lambda_velocity > 0 and stage == "fine" and l_velocity is not None:
+            loss += user_args.lambda_velocity * l_velocity.mean()
 
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/l_momentum":l_momentum,"train/l_deform_mag":l_deformation_mag},step=iteration)
@@ -427,6 +455,12 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 else:    
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
+
+                if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
+                    isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
+                    #velocities = compute_velocities(gaussians)
+                    velocities = None
+                    gaussians.staticfying(isometry=isometry,velocities=velocities,isometry_threshold=15.0,velocity_threshold=0.1) 
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
@@ -585,6 +619,7 @@ if __name__ == "__main__":
     
     # rigidity loss
     parser.add_argument("--lambda_rigidity",default=0.0,type=float)
+    parser.add_argument("--lambda_velocity",default=0.0,type=float)
     
     # shadow loss
     parser.add_argument("--lambda_shadow_mean",default=0.0,type=float)
@@ -598,6 +633,12 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_w",default=2000,type=float)
     parser.add_argument("--k_nearest",default=20,type=int)
     parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
+    parser.add_argument("--coarse_t0",action="store_true")
+
+    parser.add_argument("--staticfying_from",default=10000,type=int)
+    parser.add_argument("--staticfying_until",default=15000,type=int)
+    parser.add_argument("--staticfying_interval",default=100,type=int) 
+
     args = parser.parse_args(sys.argv[1:])
     
     if args.use_wandb:
@@ -615,7 +656,7 @@ if __name__ == "__main__":
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
-
+    torch.cuda.synchronize() # makes dataloader go brr brr
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)

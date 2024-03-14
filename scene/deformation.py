@@ -58,16 +58,26 @@ class Deformation(nn.Module):
   
         return h
 
-    def forward(self, rays_pts_emb, scales_emb=None, rotations_emb=None, opacity = None, time_emb=None):
-        if time_emb is None:
-            return self.forward_static(rays_pts_emb[:,:3])
+    def forward(self, rays_pts_emb, scales_emb=None, rotations_emb=None, opacity = None, time_emb=None,shadow_only=False):
+        
+        if shadow_only: 
+            return self.forward_shadow_only(rays_pts_emb, time_emb)
         else:
-            return self.forward_dynamic(rays_pts_emb, scales_emb, rotations_emb, opacity, time_emb)
+            if time_emb is None:
+                return self.forward_static(rays_pts_emb[:,:3])
+            else:
+                return self.forward_dynamic(rays_pts_emb, scales_emb, rotations_emb, opacity, time_emb)
 
     def forward_static(self, rays_pts_emb):
         grid_feature = self.grid(rays_pts_emb[:,:3])
         dx = self.static_mlp(grid_feature)
         return rays_pts_emb[:, :3] + dx
+    
+    def forward_shadow_only(self, rays_pts_emb, time_emb):
+        hidden = self.query_time(rays_pts_emb, None, None, time_emb).float()
+        shadow_scalars = self.shadow_net(hidden)
+        return shadow_scalars
+
     def forward_dynamic(self,rays_pts_emb, scales_emb, rotations_emb, opacity_emb, time_emb):
         hidden = self.query_time(rays_pts_emb, scales_emb, rotations_emb, time_emb).float()
         dx = self.pos_deform(hidden)
@@ -125,9 +135,9 @@ class deform_network(nn.Module):
         self.apply(initialize_weights)
         # print(self)
 
-    def forward(self, point, scales=None, rotations=None, opacity=None, times_sel=None):
+    def forward(self, point, scales=None, rotations=None, opacity=None, times_sel=None,shadow_only=False):
         if times_sel is not None:
-            return self.forward_dynamic(point, scales, rotations, opacity, times_sel)
+            return self.forward_dynamic(point, scales, rotations, opacity, times_sel,shadow_only=shadow_only)
         else:
             return self.forward_static(point)
 
@@ -135,16 +145,19 @@ class deform_network(nn.Module):
     def forward_static(self, points):
         points = self.deformation_net(points)
         return points
-    def forward_dynamic(self, point, scales=None, rotations=None, opacity=None, times_sel=None):
+    def forward_dynamic(self, point, scales=None, rotations=None, opacity=None, times_sel=None,shadow_only=False):
         # times_emb = poc_fre(times_sel, self.time_poc)
-
-        means3D, scales, rotations, opacity, shadow_scalars = self.deformation_net( point,
-                                                  scales,
-                                                rotations,
-                                                opacity,
-                                                # times_feature,
-                                                times_sel)
-        return means3D, scales, rotations, opacity, shadow_scalars
+        if shadow_only:
+            return self.deformation_net(point, scales,rotations,opacity,times_sel,shadow_only=True)
+        else:
+            means3D, scales, rotations, opacity, shadow_scalars = self.deformation_net( point,
+                                                    scales,
+                                                    rotations,
+                                                    opacity,
+                                                    # times_feature,
+                                                    times_sel)
+            return means3D, scales, rotations, opacity, shadow_scalars
+    
     def get_mlp_parameters(self):
         return self.deformation_net.get_mlp_parameters() + list(self.timenet.parameters())
     def get_grid_parameters(self):

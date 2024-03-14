@@ -59,6 +59,7 @@ class GaussianModel:
         self.xyz_gradient_accum = torch.empty(0)
         self.denom = torch.empty(0)
         self.optimizer = None
+        self.all_times = None
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self._deformation_table = torch.empty(0)
@@ -469,6 +470,13 @@ class GaussianModel:
         self.prune_points(prune_mask)
 
         torch.cuda.empty_cache()
+    
+    def staticfying(self,isometry,velocities,isometry_threshold=50,velocity_threshold=0.1):
+        mask = isometry < isometry_threshold
+        if velocities is not None:
+            mask = torch.logical_and(mask,velocities > velocity_threshold)
+        self._deformation_table = mask
+
     def densify(self, max_grad, min_opacity, extent, max_screen_size):
         grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
