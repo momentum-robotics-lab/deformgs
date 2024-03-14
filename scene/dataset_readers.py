@@ -128,10 +128,14 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     sys.stdout.write('\n')
     return cam_infos
 
-def fetchPly(path):
+def fetchPly(path,panopto=False):
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
+    #if panopto:
+        # flip z axis
+    #    positions[:,2] = -positions[:,2]
+    
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
     normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
@@ -343,7 +347,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 # format is r_viewid_timeid
                 view_id = int(file_name.split("_")[-2])
                 time_id = int(file_name.split("_")[-1])
-                
+
 
                 if view_skip is not None:
                     if view_id % view_skip != 0:
@@ -369,6 +373,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     matrix = np.array(frame["transform_matrix"])
                     R = matrix[:3,:3]
                     T = matrix[:3, 3]
+
+                #matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
+                #R = -np.transpose(matrix[:3,:3])
+                #R[:,0] = -R[:,0]
+                #T = -matrix[:3, 3] 
 
                 image_path = os.path.join(path, cam_name)
                 image_name = Path(cam_name).stem
@@ -446,7 +455,7 @@ def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_sk
         video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='video',panopto=True)
 
     if video_cam_infos is None:
-        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip,view_skip=view_skip)
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
 
     if not eval:
         train_cam_infos.extend(test_cam_infos)
@@ -455,20 +464,25 @@ def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_sk
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
     ply_path = os.path.join(path, "points3d.ply")
+    init_ply_path = os.path.join(path, "init_pt_cld.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 2000
-    print(f"Generating random point cloud ({num_pts})...")
     
-    # We create random points inside the bounds of the synthetic Blender scenes
-    xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
-    shs = np.random.random((num_pts, 3)) / 255.0
-    pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
-    storePly(ply_path, xyz, SH2RGB(shs) * 255)
-    try:
-        pcd = fetchPly(ply_path)
-    except:
-        pcd = None
-
+    if not os.path.exists(init_ply_path):
+        num_pts = 2000
+        print(f"Generating random point cloud ({num_pts})...")
+        # We create random points inside the bounds of the synthetic Blender scenes
+        scene_size = 4.0
+        xyz = np.random.random((num_pts, 3)) * scene_size - scene_size / 2
+        shs = np.random.random((num_pts, 3)) / 255.0
+        pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+        storePly(ply_path, xyz, SH2RGB(shs) * 255)
+        try:
+            pcd = fetchPly(ply_path)
+        except:
+            pcd = None
+    else:
+        pcd = fetchPly(init_ply_path,panopto=True)
+        print("Loaded initial point cloud from ",init_ply_path)
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,

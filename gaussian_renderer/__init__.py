@@ -105,19 +105,15 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = pc._rotation
     deformation_point = pc._deformation_table
     shadow_scalars = None
-    # if stage == "coarse" :
+    if stage == "coarse" :
     # if tur
-    means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
-    # else:
-    #     # means3D_deform, scales_deform, rotations_deform, opacity_deform, shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
-    #     #                                                                  rotations[deformation_point], opacity[deformation_point],
-    #     #                                                                  time[deformation_point])
-    #     means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
-    #                                                                      rotations[deformation_point], opacity[deformation_point],
-    #                                                                      time[deformation_point])        
+        means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity
+    else:
+        means3D_deform, _, rotations_deform, _ , shadow_scalars = pc._deformation(means3D[deformation_point], scales[deformation_point], 
+                                                                          rotations[deformation_point], opacity[deformation_point],
+                                                                          time[deformation_point])        
 
-    #     scales_deform, opacity_deform = scales, opacity 
-    #     # scales_deform = scales
+        scales_deform, opacity_deform = scales, opacity 
 
         
 
