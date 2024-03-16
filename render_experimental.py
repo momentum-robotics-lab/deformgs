@@ -104,18 +104,18 @@ def get_mask(projections=None,gaussian_positions=None,depth=None,cam_center=None
     mask_in_image = (projections[:,0] >= 0) & (projections[:,0] < height) & (projections[:,1] >= 0) & \
             (projections[:,1] < width)
     
-    depth_mask = np.ones_like(mask_in_image,dtype=np.bool)
+    depth_mask = np.ones_like(mask_in_image,dtype=bool)
     
-    visible_projections = projections[mask_in_image]
-    visible_gaussian_positions = gaussian_positions[mask_in_image]
+    #visible_projections = projections[mask_in_image]
+    #visible_gaussian_positions = gaussian_positions[mask_in_image]
 
     # get the occlosion mask
-    visible_depth = depth[visible_projections[:,1].astype(np.int),visible_projections[:,0].astype(np.int)]
-    gaussian_dists = np.linalg.norm(visible_gaussian_positions - cam_center,axis=-1)
+    #visible_depth = depth[visible_projections[:,1].astype(int),visible_projections[:,0].astype(int)]
+    #gaussian_dists = np.linalg.norm(visible_gaussian_positions - cam_center,axis=-1)
 
-    depth_mask[mask_in_image] = (gaussian_dists - depth_threshold) <= visible_depth
+   #depth_mask[mask_in_image] = (gaussian_dists - depth_threshold) <= visible_depth
 
-    return depth_mask & mask_in_image , mask_in_image
+    return depth_mask , mask_in_image
 
 def find_closest_gauss(gt,gauss):
     # gt : N x 3 : numpy array
@@ -187,6 +187,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         
         view.image_height = int(view.image_height * args.scale)
         view.image_width = int(view.image_width * args.scale)
+        view.image_height = int(view.image_height * args.scale)
+        view.image_width = int(view.image_width * args.scale)
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
@@ -254,6 +256,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                             all_trajs = all_trajs[-args.tracking_window:]
                             all_times = all_times[-args.tracking_window:]
 
+                    
+                    if args.tracking_window is not None:
+                        if args.tracking_window < all_trajs.shape[0]:
+                            all_trajs = all_trajs[-args.tracking_window:]
+                            all_times = all_times[-args.tracking_window:]
+
                     for j in range(all_trajs.shape[0]-1):
 
                         prev_gaussians = all_trajs[j]
@@ -274,6 +282,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                                 # draw arrow from prev_projections to current_projections
                                 color_idx = (i//args.flow_skip) % len(colors)
                                 if prev_mask[i] and opacity_mask[i]:
+                                    #traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
+                                    # draw teh same but a line
+                                    traj_img = cv2.line(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
                                     #traj_img = cv2.arrowedLine(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
                                     # draw teh same but a line
                                     traj_img = cv2.line(traj_img,(int(prev_projections[i,0]),int(prev_projections[i,1])),(int(current_projections[i,0]),int(current_projections[i,1])),colors[color_idx],arrow_tickness)
@@ -383,6 +394,7 @@ def render_sets(dataset : ModelParams, hyperparam, iteration : int, pipeline : P
     gt = None
     if os.path.exists(gt_path):
         gt = np.load(gt_path)['traj']
+        print("loaded gt from {}".format(gt_path)) 
         print("loaded gt from {}".format(gt_path)) 
     with torch.no_grad():
         gaussians = GaussianModel(dataset.sh_degree, hyperparam)

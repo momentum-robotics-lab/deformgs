@@ -2,7 +2,7 @@
 
 OptimizationParams = dict(
 
-    coarse_iterations = 3000,
+    coarse_iterations = 20000,
     deformation_lr_init = 0.00016,
     deformation_lr_final = 0.0000016,
     deformation_lr_delay_mult = 0.01,
@@ -24,5 +24,5 @@ ModelHiddenParams = dict(
     time_smoothness_weight = 0,
     l1_time_planes =  0,
     weight_decay_iteration=0,
-    bounds=1.6
+    bounds= 4.0
 )

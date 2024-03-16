@@ -29,6 +29,7 @@ from utils.external import *
 from utils.md_utils import *
 import wandb 
 # import pytorch3d.transforms as transforms
+# import pytorch3d.transforms as transforms
  
 import lpips
 import open3d as o3d
@@ -214,12 +215,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
 
         loss = Ll1
-        
-        
         if user_args.use_wandb and stage == "fine":
-            wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
-            wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
-
+                wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
+                wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
+        
         n_cams = len(viewpoint_cams)
 
         l_momentum = 0.0
@@ -244,20 +243,20 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             else:
                 diff_dimensions = False
 
-            if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
-                t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
-                o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
-                o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
-                o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
-                o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
-                knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
-                
-                if args.use_wandb and stage == "fine":
-                    wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
-                print("updating knn's")
+                if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
+                    t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
+                    o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
+                    o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
+                    o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                    o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
+                    knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
+                    
+                    if args.use_wandb and stage == "fine":
+                        wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
+                    print("updating knn's")
 
-            ## ISOMETRIC LOSS
-            all_l_iso = []
+                ## ISOMETRIC LOSS
+                all_l_iso = []
 
             
             all_l_spring = []
@@ -321,8 +320,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
                     l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
                     all_l_rigid.append(l_rigid_tmp)
+                        
                     
-                
                 prev_rotations = knn_rotations.clone()
                 prev_offsets = curr_offsets.clone()
 
@@ -376,20 +375,20 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
             loss += user_args.lambda_isometric * l_iso.mean()
 
-        if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
-            loss += user_args.lambda_rigidity * l_rigid.mean()
-        
-        if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
-            loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
+            if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
+                loss += user_args.lambda_rigidity * l_rigid.mean()
             
-        if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
-            loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
+            if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
+                loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
+                
+            if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
+                loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
 
-        if user_args.lambda_deformation_mag > 0 and stage == "fine":
-            loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
-            
-        if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
-            loss += user_args.lambda_spring * l_spring.mean()
+            if user_args.lambda_deformation_mag > 0 and stage == "fine":
+                loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
+                
+            if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
+                loss += user_args.lambda_spring * l_spring.mean()
 
         if user_args.lambda_velocity > 0 and stage == "fine" and l_velocity is not None:
             loss += user_args.lambda_velocity * l_velocity.mean()
@@ -590,7 +589,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[i*500 for i in range(0,120)])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000, 3000, 7_000, 8000, 9000, 14000, 20000, 30_000,45000,60000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1,10,50,100,500,750,100,1250,1500,1750,2000, 3000, 7_000, 8000, 9000, 14000, 20000, 30_000,45000,60000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)

@@ -44,6 +44,12 @@ class CameraInfo(NamedTuple):
     view_id: int 
     time_id: int
     flow: np.array = None
+    
+    c_x: np.array = None 
+    c_y: np.array = None 
+    f_x: np.array = None
+    f_y: np.array = None
+    
    
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -123,10 +129,14 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     sys.stdout.write('\n')
     return cam_infos
 
-def fetchPly(path):
+def fetchPly(path,panopto=False):
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
+    #if panopto:
+        # flip z axis
+    #    positions[:,2] = -positions[:,2]
+    
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
     normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
@@ -233,7 +243,10 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
     render_times = torch.linspace(0,maxtime,render_poses.shape[0])
     with open(os.path.join(path, template_transformsfile)) as json_file:
         template_json = json.load(json_file)
-        fovx = template_json["camera_angle_x"]
+        if "camera_angle_x" in template_json.keys():
+            fovx = template_json["camera_angle_x"]
+        else:
+            fovx = None
     # load a single image to get image info.
     
         
@@ -249,7 +262,8 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         image_name = Path(cam_name).stem
         image = Image.open(image_path)
         im_data = np.array(image.convert("RGBA"))
-        image = PILtoTorch(image,(800,800))
+        # image = PILtoTorch(image,(800,800))
+        image = PILtoTorch(image,None)
         break
     # format information
     for idx, (time, poses) in enumerate(zip(render_times,render_poses)):
@@ -258,14 +272,37 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
         R = -np.transpose(matrix[:3,:3])
         R[:,0] = -R[:,0]
         T = -matrix[:3, 3]
-        fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
-        FovY = fovy 
-        FovX = fovx
-        cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
-                            time = time,time_id=None,view_id=None))
+
+        if fovx is not None:
+            fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
+            FovY = fovy 
+            FovX = fovx
+            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                                image_path=None, image_name=None, width=image.shape[1], height=image.shape[2],
+                                time = time,time_id=None,view_id=None))
+            
+        else:
+            k = np.array(frame['k'])
+            f_x = k[0][0]
+            f_y = k[1][1]
+            c_x = k[0][2]
+            c_y = k[1][2]
+            w = frame['w']
+            h = frame['h']
+            
+            FovX = w / (2 * f_x)
+            FovY = h / (2 * f_y)
+            
+            fovx = None 
+
+            cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                            image_path=image_path, image_name=image_name, width=w, height=h,
+                            time = time,view_id=None,time_id=None,flow=None,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
+
     return cam_infos
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train'):
+
+
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train',panopto=False):
     cam_infos = []
     
     flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
@@ -287,7 +324,9 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
-        fovx = contents["camera_angle_x"]
+        fovx = None 
+        if "camera_angle_x" in contents.keys():
+            fovx = contents["camera_angle_x"]
 
         frames = contents["frames"]
         
@@ -302,7 +341,6 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
         
         for idx, frame in tqdm(enumerate(frames),total=len(frames)):
-            
             time = frame["time"]
             
             if time_skip is None or time in kept_times:
@@ -329,7 +367,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 if view_skip is not None:
                     if view_id % view_skip != 0:
                         continue
-                
+                    
                 flow = None
                 # check if file_path is in img_paths
                 if img_paths_flow is not None:
@@ -340,10 +378,21 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 cam_name = os.path.join(path, file_path)
                 # time = mapper[frame["time"]]
                 time = frame["time"]
-                matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
-                R = -np.transpose(matrix[:3,:3])
-                R[:,0] = -R[:,0]
-                T = -matrix[:3, 3]
+
+                if panopto == False:
+                    matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
+                    R = -np.transpose(matrix[:3,:3])
+                    R[:,0] = -R[:,0]
+                    T = -matrix[:3, 3]
+                else:
+                    matrix = np.array(frame["transform_matrix"])
+                    R = matrix[:3,:3]
+                    T = matrix[:3, 3]
+
+                #matrix = np.linalg.inv(np.array(frame["transform_matrix"]))
+                #R = -np.transpose(matrix[:3,:3])
+                #R[:,0] = -R[:,0]
+                #T = -matrix[:3, 3] 
 
                 image_path = os.path.join(path, cam_name)
                 image_name = Path(cam_name).stem
@@ -356,15 +405,39 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 norm_data = im_data / 255.0
                 arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
                 image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-                image = PILtoTorch(image,(800,800))
-                fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
-                FovY = fovy 
-                FovX = fovx
-
-                cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                # image = PILtoTorch(image,(800,800))
+                image = PILtoTorch(image,None)
+                
+                if fovx is not None:
+                    fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
+                    FovY = fovy 
+                    FovX = fovx
+                    
+                    cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
                                 time = time,view_id=view_id,time_id=time_id,flow=flow))
+                    
+                else:
+                    k = np.array(frame['k'])
+                    f_x = k[0][0]
+                    f_y = k[1][1]
+                    c_x = k[0][2]
+                    c_y = k[1][2]
+                    w = frame['w']
+                    h = frame['h']
+                    
+                    FovX = focal2fov(f_x,w)
+                    FovY = focal2fov(f_y,h)
+                    
+                    fovx = None 
+
+                    cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+                                    image_path=image_path, image_name=image_name, width=w, height=h,
+                                    time = time,view_id=view_id,time_id=time_id,flow=flow,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
+
     return cam_infos
+
+
 def read_timeline(path):
     with open(os.path.join(path, "transforms_train.json")) as json_file:
         train_json = json.load(json_file)
@@ -381,7 +454,61 @@ def read_timeline(path):
         timestamp_mapper[time] = time/max_time_float
 
     return timestamp_mapper, max_time_float
-def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None,single_cam_video=False):
+
+def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
+    timestamp_mapper, max_time = read_timeline(path)
+    print("Reading Training Transforms")
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train',panopto=True)
+    
+    print("Reading Test Transforms")
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test',panopto=True)
+    print("Generating Video Transforms")
+
+    video_path = os.path.join(path, "video.json")
+    video_cam_infos = None
+    if os.path.exists(video_path):
+        video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='video',panopto=True)
+
+    if video_cam_infos is None:
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip)
+
+    if not eval:
+        train_cam_infos.extend(test_cam_infos)
+        test_cam_infos = []
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)
+
+    ply_path = os.path.join(path, "points3d.ply")
+    init_ply_path = os.path.join(path, "init_pt_cld.ply")
+    # Since this data set has no colmap data, we start with random points
+    
+    if not os.path.exists(init_ply_path):
+        num_pts = 2000
+        print(f"Generating random point cloud ({num_pts})...")
+        # We create random points inside the bounds of the synthetic Blender scenes
+        scene_size = 4.0
+        xyz = np.random.random((num_pts, 3)) * scene_size - scene_size / 2
+        shs = np.random.random((num_pts, 3)) / 255.0
+        pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+        storePly(ply_path, xyz, SH2RGB(shs) * 255)
+        try:
+            pcd = fetchPly(ply_path)
+        except:
+            pcd = None
+    else:
+        pcd = fetchPly(init_ply_path,panopto=True)
+        print("Loaded initial point cloud from ",init_ply_path)
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           video_cameras=video_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path,
+                           maxtime=max_time
+                           )
+    return scene_info
+
+def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
     # time_skip = 4
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
@@ -411,6 +538,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
+    num_pts = 2000
     num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     
@@ -573,6 +701,7 @@ def readdynerfInfo(datadir,use_bg_points,eval):
 sceneLoadTypeCallbacks = {
     "Colmap": readColmapSceneInfo,
     "Blender" : readNerfSyntheticInfo,
+    "Panopto": readPanoptoSceneInfo,
     "dynerf" : readdynerfInfo,
     "nerfies": readHyperDataInfos,  # NeRFies & HyperNeRF dataset proposed by [https://github.com/google/hypernerf/releases/tag/v0.1]
 }

@@ -36,9 +36,9 @@ class FourDGSdataset(Dataset):
         
         view_id = self.viewpoint_ids[index]
         time_id = self.time_ids[index]
-
-        return Camera(colmap_id=index,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                          image_name=f"{index}",uid=index,data_device=torch.device("cuda"),time=time,view_id=view_id,time_id=time_id,flow=flow)
+        return Camera(colmap_id=view_id,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
+                          image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time,flow=flow,
+                          f_x = caminfo.f_x, f_y = caminfo.f_y, c_x = caminfo.c_x, c_y = caminfo.c_y, width = caminfo.width, height = caminfo.height)
     def __len__(self):
         
         return len(self.dataset)
@@ -119,7 +119,9 @@ class MDNerfDataset(Dataset):
         time = caminfo.time
         flow = caminfo.flow
         return Camera(colmap_id=view_id,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
-                          image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time,flow=flow)
+                          image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time,flow=flow,
+                          f_x = caminfo.f_x, f_y = caminfo.f_y, c_x = caminfo.c_x, c_y = caminfo.c_y, width = caminfo.width, height = caminfo.height,
+                          view_id=view_id,time_id=time_id,image_path=caminfo.image_path)
     def __len__(self):
         
         return self.n_viewpoints
