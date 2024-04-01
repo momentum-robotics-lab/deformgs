@@ -175,7 +175,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         log_deform_path = None
 
         view_time = view.time
-                
         if prev_projections is None:
             traj_img = np.zeros((view.image_height,view.image_width,3))
 
@@ -302,7 +301,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             gt = view.original_image[0:3, :, :]
             # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
             gt_list.append(gt)
-
+    breakpoint()
     video_imgs = [to8(img) for img in render_list]
     save_imgs = [torch.tensor((img.transpose(2,0,1)),device="cpu") for img in render_list ]
 

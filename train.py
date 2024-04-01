@@ -29,7 +29,6 @@ from utils.external import *
 from utils.md_utils import *
 import wandb 
 # import pytorch3d.transforms as transforms
-# import pytorch3d.transforms as transforms
  
 import lpips
 import open3d as o3d
@@ -207,18 +206,29 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         gt_image_tensor = torch.cat(gt_images,0)
         # Loss
         Ll1 = l1_loss(image_tensor, gt_image_tensor)
+
+        # write gt_image tensor to pngs 
+        gt_image_tensor_np = gt_image_tensor.cpu().numpy() 
+        gt_image_tensor_np = np.clip(gt_image_tensor_np,0,1)
+        gt_image_tensor_np = (gt_image_tensor_np * 255).astype(np.uint8)
+        gt_image_tensor_np = gt_image_tensor_np.transpose(0,2,3,1)
+        for i in range(gt_image_tensor_np.shape[0]):
+            from PIL import Image
+            image = gt_image_tensor_np[i]
+            image = Image.fromarray(image)
+            image.save(f"gt_image_{i}.png")
+
         # Ll1 = l2_loss(image, gt_image)
 
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
         
         # norm
-        
-
         loss = Ll1
-        if user_args.use_wandb and stage == "fine":
-                wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
-                wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
         
+        if user_args.use_wandb and stage == "fine":
+            wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
+            wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
+
         n_cams = len(viewpoint_cams)
 
         l_momentum = 0.0
@@ -236,27 +246,27 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         l_iso, l_rigid, l_shadow_mean, l_shadow_delta, l_spring, l_velocity = None, None, None, None, None, None
         diff_dimensions = False
-        if stage == "fine" and iteration > user_args.reg_iter:
+        if stage == "fine" and iteration > user_args.reg_iter and not user_args.no_reg:
             
             if o3d_knn_dists is not None and all_means_3D_deform.shape[1]*args.k_nearest != o3d_knn_dists.shape[0]:
                 diff_dimensions = True
             else:
                 diff_dimensions = False
 
-                if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
-                    t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
-                    o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
-                    o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
-                    o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
-                    o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
-                    knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
-                    
-                    if args.use_wandb and stage == "fine":
-                        wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
-                    print("updating knn's")
+            if iteration % user_args.knn_update_iter == 0 or o3d_knn_dists is None or diff_dimensions:
+                t_0_pts = get_pos_t0(gaussians).detach().cpu().numpy()
+                o3d_dist_sqrd, o3d_knn_indices = o3d_knn(t_0_pts, args.k_nearest)
+                o3d_knn_dists = np.sqrt(o3d_dist_sqrd)
+                o3d_knn_dists = torch.tensor(o3d_knn_dists,device="cuda").flatten()
+                o3d_dist_sqrd = torch.tensor(o3d_dist_sqrd,device="cuda").flatten()
+                knn_weights = torch.exp(-args.lambda_w * o3d_dist_sqrd)
+                
+                if args.use_wandb and stage == "fine":
+                    wandb.log({"train/o3d_knn_dists":o3d_knn_dists.median()},step=iteration)
+                print("updating knn's")
 
-                ## ISOMETRIC LOSS
-                all_l_iso = []
+            ## ISOMETRIC LOSS
+            all_l_iso = []
 
             
             all_l_spring = []
@@ -320,8 +330,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
                     l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
                     all_l_rigid.append(l_rigid_tmp)
-                        
                     
+                
                 prev_rotations = knn_rotations.clone()
                 prev_offsets = curr_offsets.clone()
 
@@ -375,20 +385,20 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if user_args.lambda_isometric > 0 and stage == "fine" and l_iso is not None:
             loss += user_args.lambda_isometric * l_iso.mean()
 
-            if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
-                loss += user_args.lambda_rigidity * l_rigid.mean()
+        if user_args.lambda_rigidity > 0 and stage == "fine" and l_rigid is not None:
+            loss += user_args.lambda_rigidity * l_rigid.mean()
+        
+        if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
+            loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
             
-            if user_args.lambda_shadow_mean > 0 and stage == "fine" and l_shadow_mean is not None:
-                loss += user_args.lambda_shadow_mean * l_shadow_mean.mean()    
-                
-            if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
-                loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
+        if user_args.lambda_shadow_delta > 0 and stage == "fine" and l_shadow_delta is not None:
+            loss += user_args.lambda_shadow_delta * l_shadow_delta.mean()
 
-            if user_args.lambda_deformation_mag > 0 and stage == "fine":
-                loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
-                
-            if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
-                loss += user_args.lambda_spring * l_spring.mean()
+        if user_args.lambda_deformation_mag > 0 and stage == "fine":
+            loss += user_args.lambda_deformation_mag * l_deformation_mag.mean()
+            
+        if user_args.lambda_spring > 0 and stage == "fine" and l_spring is not None:
+            loss += user_args.lambda_spring * l_spring.mean()
 
         if user_args.lambda_velocity > 0 and stage == "fine" and l_velocity is not None:
             loss += user_args.lambda_velocity * l_velocity.mean()
@@ -455,11 +465,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
 
-                if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
-                    isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
-                    #velocities = compute_velocities(gaussians)
-                    velocities = None
-                    gaussians.staticfying(isometry=isometry,velocities=velocities,isometry_threshold=15.0,velocity_threshold=0.1) 
+                #if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
+                    #isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
+                    ##velocities = compute_velocities(gaussians)
+                    #velocities = None
+                    #gaussians.staticfying(isometry=isometry,velocities=velocities,isometry_threshold=15.0,velocity_threshold=0.1) 
 
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
@@ -589,7 +599,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[i*500 for i in range(0,120)])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1,10,50,100,500,750,100,1250,1500,1750,2000, 3000, 7_000, 8000, 9000, 14000, 20000, 30_000,45000,60000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[2000, 3000, 7_000, 8000, 9000, 14000, 20000, 30_000,45000,60000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
@@ -636,10 +646,11 @@ if __name__ == "__main__":
 
     parser.add_argument("--staticfying_from",default=10000,type=int)
     parser.add_argument("--staticfying_until",default=15000,type=int)
-    parser.add_argument("--staticfying_interval",default=100,type=int) 
+    parser.add_argument("--staticfying_interval",default=100,type=int)
+    parser.add_argument("--no_reg",action="store_true")
+    parser.add_argument("--scale",default=None,type=float) 
 
     args = parser.parse_args(sys.argv[1:])
-    
     if args.use_wandb:
         wandb.init(project=args.wandb_project,name=args.wandb_name)
         wandb.config.update(args)
@@ -664,4 +675,3 @@ if __name__ == "__main__":
 
     # All done
     print("\nTraining complete.")
-

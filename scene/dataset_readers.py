@@ -29,6 +29,8 @@ from scene.gaussian_model import BasicPointCloud
 from utils.general_utils import PILtoTorch
 from tqdm import tqdm
 import h5py
+import cv2 
+
 class CameraInfo(NamedTuple):
     uid: int
     R: np.array
@@ -302,7 +304,7 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
     return cam_infos
 
 
-def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train',panopto=False):
+def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train',panopto=False,scale=None):
     cam_infos = []
     
     flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
@@ -400,6 +402,10 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                 im_data = np.array(image.convert("RGBA"))
 
+                if scale is not None:
+                    #cv2 resize according to scale 
+                    im_data = cv2.resize(im_data,(int(im_data.shape[1]*scale),int(im_data.shape[0]*scale)))
+
                 bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
 
                 norm_data = im_data / 255.0
@@ -419,12 +425,20 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     
                 else:
                     k = np.array(frame['k'])
-                    f_x = k[0][0]
-                    f_y = k[1][1]
-                    c_x = k[0][2]
-                    c_y = k[1][2]
-                    w = frame['w']
-                    h = frame['h']
+                    if scale is None:
+                        f_x = k[0][0]
+                        f_y = k[1][1]
+                        c_x = k[0][2]
+                        c_y = k[1][2]
+                        w = frame['w']
+                        h = frame['h']
+                    else:
+                        f_x = k[0][0]*scale
+                        f_y = k[1][1]*scale
+                        c_x = k[0][2]*scale
+                        c_y = k[1][2]*scale
+                        w = int(frame['w']*scale)
+                        h = int(frame['h']*scale)
                     
                     FovX = focal2fov(f_x,w)
                     FovY = focal2fov(f_y,h)
@@ -455,13 +469,13 @@ def read_timeline(path):
 
     return timestamp_mapper, max_time_float
 
-def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None):
+def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_skip=None,view_skip=None,scale=None):
     timestamp_mapper, max_time = read_timeline(path)
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train',panopto=True)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='train',panopto=True,scale=scale)
     
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test',panopto=True)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension, timestamp_mapper, time_skip=time_skip,view_skip=view_skip,split='test',panopto=True,scale=scale)
     print("Generating Video Transforms")
 
     video_path = os.path.join(path, "video.json")
@@ -480,7 +494,7 @@ def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_sk
 
     ply_path = os.path.join(path, "points3d.ply")
     init_ply_path = os.path.join(path, "init_pt_cld.ply")
-    # Since this data set has no colmap data, we start with random points
+    # Since this data set has no colmap data, we start with random point
     
     if not os.path.exists(init_ply_path):
         num_pts = 2000
