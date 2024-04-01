@@ -19,7 +19,7 @@ port=6067
 for SCENE in $FOLD_CLOTH; 
 do
     python3 train.py -s "data/panopto/${SCENE}" --port 6067 --expname "panopto/${SCENE}" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 --lambda_rigidity $RIGIDITY_LAMBDA \
-    --lambda_spring $LAMBDA_SPRING --lambda_momentum $LAMBDA_MOMENTUM --k_nearest 5 --lambda_isometric $LAMBDA_ISOMETRIC --view_skip 2000 --time_skip 100 --view_skip 4 --no_reg --coarse_t0 --scale 0.25
+    --lambda_spring $LAMBDA_SPRING --lambda_momentum $LAMBDA_MOMENTUM --k_nearest 5 --lambda_isometric $LAMBDA_ISOMETRIC --view_skip 2000 --time_skip 1 --view_skip 4 --no_reg --coarse_t0 --scale 0.25
     port=$((port+1))
 done
 #python3 train.py -s $DATA_LOCATION --port 6067 --expname "panopto/basketball_all_momentum" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 --lambda_rigidity $RIGIDITY_LAMBDA \

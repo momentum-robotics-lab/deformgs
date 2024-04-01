@@ -131,6 +131,7 @@ def find_closest_gauss(gt,gauss):
     return torch.argmin(dists,dim=0).cpu().numpy()
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background,log_deform=False,args=None,gt=None,force_colors=None):
+    
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
     gts_path = os.path.join(model_path, name, "ours_{}".format(iteration), "gt")
 
@@ -184,10 +185,10 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             # remove time from todo_times
             todo_times = todo_times[todo_times != view_time]
         
-        view.image_height = int(view.image_height * args.scale)
-        view.image_width = int(view.image_width * args.scale)
-        view.image_height = int(view.image_height * args.scale)
-        view.image_width = int(view.image_width * args.scale)
+        #view.image_height = int(view.image_height * args.scale)
+        #view.image_width = int(view.image_width * args.scale)
+        #view.image_height = int(view.image_height * args.scale)
+        #view.image_width = int(view.image_width * args.scale)
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
@@ -301,7 +302,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             gt = view.original_image[0:3, :, :]
             # torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
             gt_list.append(gt)
-    breakpoint()
     video_imgs = [to8(img) for img in render_list]
     save_imgs = [torch.tensor((img.transpose(2,0,1)),device="cpu") for img in render_list ]
 

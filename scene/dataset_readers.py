@@ -365,11 +365,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     # compute view_id and time_id based on unique transforms and times
                     view_id = np.where(np.all(unique_transforms == np.array(frame["transform_matrix"]),axis=1))[0][0]
                     time_id = np.where(unique_times == frame["time"])[0][0]
-                
+
                 if view_skip is not None:
                     if view_id % view_skip != 0:
                         continue
-                    
+
                 flow = None
                 # check if file_path is in img_paths
                 if img_paths_flow is not None:
@@ -552,7 +552,6 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
 
     ply_path = os.path.join(path, "points3d.ply")
     # Since this data set has no colmap data, we start with random points
-    num_pts = 2000
     num_pts = 2000
     print(f"Generating random point cloud ({num_pts})...")
     
