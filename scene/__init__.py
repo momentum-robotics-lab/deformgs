@@ -64,7 +64,6 @@ class Scene:
                 print("Found transforms_train.json file without global intrinsics, assuming Panopto data set!")
                 scene_info = sceneLoadTypeCallbacks["Panopto"](args.source_path, args.white_background, args.eval,time_skip=time_skip,view_skip=view_skip,scale=user_args.scale)
             
-            
             print("Found transforms_train.json file, assuming Blender data set!")
             
         elif os.path.exists(os.path.join(args.source_path, "poses_bounds.npy")):

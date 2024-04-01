@@ -231,7 +231,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
         n_cams = len(viewpoint_cams)
 
-        l_momentum = 0.0
+        l_momentum = None
         if n_cams >= 3:
             ## MOMENTUM LOSS 
             l_momentum = all_means_3D_deform[2,:,:] - 2*all_means_3D_deform[1,:,:] + all_means_3D_deform[0,:,:]
@@ -378,7 +378,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                             "train/l_shadow_mean":l_shadow_mean,"train/l_shadow_delta":l_shadow_delta},step=iteration)
         
         ## add momentum term to loss
-        if user_args.lambda_momentum > 0 and stage == "fine":
+        if user_args.lambda_momentum > 0 and stage == "fine" and l_momentum is not None:
             loss += user_args.lambda_momentum * l_momentum.mean()
         
         ## add isometric term to loss
