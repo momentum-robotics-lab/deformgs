@@ -273,6 +273,19 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales = scales_final[mask],
         rotations = rotations_final[mask],
         cov3D_precomp = cov3D_precomp)
+    
+
+    mask_color = pc.mask_activation(pc._mask.repeat(1,3))
+    rendered_mask, _, _ = rasterizer(
+        means3D = means3D_final[mask],
+        means2D = means2D[mask],
+        shs = shs,
+        colors_precomp = mask_color[mask],
+        opacities = opacity[mask],
+        scales = scales_final[mask],
+        rotations = rotations_final[mask],
+        cov3D_precomp = cov3D_precomp)
+    
 
     # projecting to cam frame for later use in optic flow
     means_deform_h = torch.cat([means3D_final,torch.ones_like(means3D_final[:,0:1])],dim=1).T 
@@ -297,6 +310,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {"render": rendered_image,
+            "mask": rendered_mask,
             "viewspace_points": screenspace_points,
             "visibility_filter" : radii > 0,
             "radii": radii,

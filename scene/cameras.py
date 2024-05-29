@@ -42,7 +42,6 @@ class Camera(nn.Module):
         self.width = width
         self.height = height
         self.image_path = image_path
-
         try:
             self.data_device = torch.device(data_device)
         except Exception as e:

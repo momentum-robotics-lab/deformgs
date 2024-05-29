@@ -152,7 +152,7 @@ class GaussianModel:
         rots[:, 0] = 1
 
         opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
-        masks = 0.5*torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda")
+        masks = torch.zeros((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda")
 
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
@@ -473,6 +473,11 @@ class GaussianModel:
         new_mask = self._mask[selected_pts_mask]
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_deformation_table,new_mask)
+
+    
+    def mask_activation(self, mask):
+        return torch.sigmoid(mask)
+
     def prune(self, max_grad, min_opacity, extent, max_screen_size):
         prune_mask = (self.get_opacity < min_opacity).squeeze()
         # prune_mask_2 = torch.logical_and(self.get_opacity <= inverse_sigmoid(0.101 , dtype=torch.float, device="cuda"), self.get_opacity >= inverse_sigmoid(0.999 , dtype=torch.float, device="cuda"))

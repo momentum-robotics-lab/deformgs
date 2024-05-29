@@ -84,8 +84,6 @@ def flow_loss(all_projections=None,visibility_filter_list=None,viewpoint_cams=No
     raft_flow_1 = viewpoint_cams[1].flow
 
 
-
-
 def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations, 
                          checkpoint_iterations, checkpoint, debug_from,
                          gaussians, scene, stage, tb_writer, train_iter,timer,user_args=None):
@@ -169,6 +167,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             pipe.debug = True
         images = []
         gt_images = []
+        masks = []
+        gt_masks = []
         radii_list = []
         visibility_filter_list = []
         viewspace_point_tensor_list = []
@@ -184,6 +184,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             images.append(image.unsqueeze(0))
+            
+            masks.append(render_pkg["mask"].unsqueeze(0)[:,0])
+            gt_mask = viewpoint_cam.mask.cuda()
+            gt_masks.append(gt_mask)
+
             gt_image = viewpoint_cam.original_image.cuda()
             gt_images.append(gt_image.unsqueeze(0))
             radii_list.append(radii.unsqueeze(0))
@@ -224,7 +229,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             image.save(f"gt_image_{i}.png")
 
         # Ll1 = l2_loss(image, gt_image)
-
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
         
         # norm

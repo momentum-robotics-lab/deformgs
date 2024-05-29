@@ -407,14 +407,17 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     mask = np.array(Image.open(mask_path))
                     # convert from [0-255] to [0-1] (float)
                     mask = mask / 255.0
-                    mask = PILtoTorch(mask,None)
                 else:
                     mask = None
 
                 if scale is not None:
                     #cv2 resize according to scale 
                     im_data = cv2.resize(im_data,(int(im_data.shape[1]*scale),int(im_data.shape[0]*scale)))
+                    if mask is not None:
+                        mask = cv2.resize(mask,(int(mask.shape[1]*scale),int(mask.shape[0]*scale)))
 
+                if mask is not None: 
+                    mask = PILtoTorch(mask,None)
                 bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
 
                 norm_data = im_data / 255.0
