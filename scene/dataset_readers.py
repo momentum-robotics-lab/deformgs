@@ -406,7 +406,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 if os.path.exists(mask_path):
                     mask = np.array(Image.open(mask_path))
                     # convert from [0-255] to [0-1] (float)
-                    mask = mask / 255.0
+                    mask = mask *1.0
                 else:
                     mask = None
 

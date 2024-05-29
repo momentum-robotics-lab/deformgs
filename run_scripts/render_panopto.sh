@@ -13,6 +13,6 @@ export FOLD_CLOTH="fold_cloth_short"
 
 for SCENE in $FOLD_CLOTH; 
 do
-    python3 render_experimental.py --model_path "output/panopto/${SCENE}_reg_coarse_all"  --configs arguments/mdnerf-dataset/cube.py --view_skip 20 --time_skip 1 --scale 0.25 --bounding_box -0.3 0.3 -0.3 0.3 -0.5 0.6 --skip_video \
+    python3 render_experimental.py --model_path "output/panopto/${SCENE}_reg_coarse_all"  --configs arguments/mdnerf-dataset/cube.py --view_skip 20 --time_skip 1 --scale 0.25 --skip_video \
     --show_flow --flow_skip 200 --tracking_window 10  
 done

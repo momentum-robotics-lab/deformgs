@@ -188,7 +188,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             masks.append(render_pkg["mask"].unsqueeze(0)[:,0])
             gt_mask = viewpoint_cam.mask.cuda()
             gt_masks.append(gt_mask)
-
             gt_image = viewpoint_cam.original_image.cuda()
             gt_images.append(gt_image.unsqueeze(0))
             radii_list.append(radii.unsqueeze(0))
@@ -216,6 +215,17 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         gt_image_tensor = torch.cat(gt_images,0)
         # Loss
         Ll1 = l1_loss(image_tensor, gt_image_tensor)
+
+        # check if masks exist
+        # if gt_masks has no None in list
+        if all([mask is not None for mask in gt_masks]):
+            Lmask = l1_loss(torch.cat(masks,0),torch.cat(gt_masks,0))
+            if iteration > user_args.mask_loss_from and user_args.lambda_mask > 0:
+                Ll1 += user_args.lambda_mask * Lmask
+
+
+            if user_args.use_wandb:
+                wandb.log({"train/mask_loss":Lmask},step=iteration)
 
         # write gt_image tensor to pngs 
         gt_image_tensor_np = gt_image_tensor.cpu().numpy() 
@@ -667,6 +677,9 @@ if __name__ == "__main__":
     parser.add_argument("--no_reg",action="store_true")
     parser.add_argument("--scale",default=None,type=float) 
     parser.add_argument("--bounding_box",nargs='+',type=float,default=None)
+    
+    parser.add_argument("--mask_loss_from",default = 3000,type=int)
+    parser.add_argument("--lambda_mask",default=0.1,type=float)
 
     args = parser.parse_args(sys.argv[1:])
     if args.use_wandb:

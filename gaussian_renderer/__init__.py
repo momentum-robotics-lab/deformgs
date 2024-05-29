@@ -286,7 +286,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations_final[mask],
         cov3D_precomp = cov3D_precomp)
     
-
     # projecting to cam frame for later use in optic flow
     means_deform_h = torch.cat([means3D_final,torch.ones_like(means3D_final[:,0:1])],dim=1).T 
     cam_transform = viewpoint_camera.full_proj_transform.to(means_deform_h.device).T

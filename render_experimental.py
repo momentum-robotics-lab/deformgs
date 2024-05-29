@@ -142,6 +142,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     save_imgs = []
     gt_list = []
     render_list = []
+    masks = []
     
     all_times = [view.time for view in views]
     n_gaussians = gaussians._xyz.shape[0]
@@ -175,7 +176,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if idx == 0:time1 = time()
         log_deform_path = None
-
         view_time = view.time
         if prev_projections is None:
             traj_img = np.zeros((view.image_height,view.image_width,3))
@@ -193,7 +193,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors,bounding_box=args.bounding_box)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
+        mask = tonumpy(render_pkg["mask"]).transpose(1,2,0)
 
+        masks.append(mask)
         if opacities is None:
             opacities = render_pkg["opacities"].to("cpu").numpy()
             opacity_mask = opacities > opacity_threshold
@@ -220,8 +222,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             all_times = np.concatenate((all_times,np.array([view_time])),axis=0)
             all_trajs = np.concatenate((all_trajs,render_pkg["means3D_deform"][gt_idxs].unsqueeze(0).cpu().numpy()),axis=0)
         
-        
-                
         if args.show_flow:
             traj_img = np.zeros((view.image_height,view.image_width,3))
             current_projections = render_pkg["projections"].to("cpu").numpy()[gt_idxs]
@@ -301,6 +301,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     video_imgs = [to8(img) for img in render_list]
     save_imgs = [torch.tensor((img.transpose(2,0,1)),device="cpu") for img in render_list ]
 
+    masks_video = [to8(img) for img in masks]
 
     time2=time()
     print("FPS:",(len(views)-1)/(time2-time1))
@@ -316,8 +317,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         for image in tqdm(save_imgs):
             torchvision.utils.save_image(image, os.path.join(render_path, '{0:05d}'.format(count) + ".png"))
             count +=1
-    
+
     imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_rgb.mp4'), video_imgs, fps=30, quality=8)
+    imageio.mimwrite(os.path.join(model_path, name, "ours_{}".format(iteration), 'video_masks.mp4'), masks_video, fps=30, quality=8)
 
 
 def signal_to_colors(signal,mode='minmax',threshold=None):
