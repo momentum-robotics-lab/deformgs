@@ -9,7 +9,7 @@ OptimizationParams = dict(
     grid_lr_init = 0.0016,
     grid_lr_final = 0.000016,
     iterations = 20000,
-    pruning_interval = 8000,
+    pruning_interval = 100,
     percent_dense = 0.01,
     # opacity_reset_interval=30000
 
@@ -24,5 +24,5 @@ ModelHiddenParams = dict(
     time_smoothness_weight = 0,
     l1_time_planes =  0,
     weight_decay_iteration=0,
-    bounds= 4.0
+    bounds= 1.0
 )

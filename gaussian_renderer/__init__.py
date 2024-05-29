@@ -17,6 +17,14 @@ from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 import matplotlib.pyplot as plt
 
+def filter_gaussians(gaussians,bounding_box):
+    # gaussians : N x 3 torch tensor
+    # bounding_box : 6 x 1 torch tensor
+    # return : N x 3 torch tensor
+    mask = (gaussians[:,0] > bounding_box[0]) & (gaussians[:,0] < bounding_box[1]) & \
+            (gaussians[:,1] > bounding_box[2]) & (gaussians[:,1] < bounding_box[3]) & \
+            (gaussians[:,2] > bounding_box[4]) & (gaussians[:,2] < bounding_box[5])
+    return mask
 
 def get_pos_t0(pc:GaussianModel):
     means3D = pc.get_xyz
@@ -85,7 +93,7 @@ def get_all_pos(pc:GaussianModel):
 
 
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None,bounding_box=None):
     """
     Render the scene. 
     
@@ -201,7 +209,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     rotations_final[~deformation_point] = rotations[~deformation_point]
     scales_final[~deformation_point] = scales[~deformation_point]
     opacity_final[~deformation_point] = opacity[~deformation_point]
-    
 
     if shadow_scalars is not None:
         shadow_scalars_final[deformation_point] = shadow_scalars
@@ -252,7 +259,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # flatten to [N]
     mask = mask.flatten()    
 
-    
+    if bounding_box is not None:
+        bounding_mask = filter_gaussians(means3D_final,bounding_box)
+        mask = mask & bounding_mask
+
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii, depth = rasterizer(
         means3D = means3D_final[mask],

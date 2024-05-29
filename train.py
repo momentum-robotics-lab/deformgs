@@ -123,7 +123,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 net_image_bytes = None
                 custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer, ts = network_gui.receive()
                 if custom_cam != None:
-                    net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer, stage="stage")["render"]
+                    net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer, stage="stage",bounding_box=user_args.bounding_box)["render"]
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
                 network_gui.send(net_image_bytes, dataset.source_path)
                 if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
@@ -159,6 +159,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         else:
             idx = randint(0, len(viewpoint_stack)-1) # picking a random viewpoint
             viewpoint_cams = viewpoint_stack[idx] # returning 3 subsequence timesteps
+
+        # preprocess mask in [0,1] range
+        # add property to gaussian to infer mask 'color'
+        # train that on static scene
+
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -477,13 +482,21 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     gaussians.densify(densify_threshold, opacity_threshold, scene.cameras_extent, size_threshold)
                 if iteration > opt.pruning_from_iter and iteration % opt.pruning_interval == 0:
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-
                     gaussians.prune(densify_threshold, opacity_threshold, scene.cameras_extent, size_threshold)
-                    
+
+                    print("pruning") 
+                    if user_args.bounding_box is not None:
+                        gaussians.prune_bounding_box(user_args.bounding_box)
+                        print("pruning box")
+
+                opacity_reset = False
                 if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                     print("reset opacity")
                     gaussians.reset_opacity()
-                    
+                    opacity_reset = True
+
+
+
 
             # Optimizer step
             if iteration < opt.iterations:
@@ -649,6 +662,7 @@ if __name__ == "__main__":
     parser.add_argument("--staticfying_interval",default=100,type=int)
     parser.add_argument("--no_reg",action="store_true")
     parser.add_argument("--scale",default=None,type=float) 
+    parser.add_argument("--bounding_box",nargs='+',type=float,default=None)
 
     args = parser.parse_args(sys.argv[1:])
     if args.use_wandb:

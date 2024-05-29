@@ -18,7 +18,7 @@ do
     do 
 
         python3 render_experimental.py --model_path "output/final_scenes_bg_20m_range_exp_iso/${SCENE}_linear_iso_3d_shadow" --configs arguments/mdnerf-dataset/cube.py --skip_train --skip_video --view_skip 50 --time_skip 1 --log_deform \
-        --show_flow --flow_skip 100 --tracking_window 100 --scale 1 --no_gt --show_fl
+        --show_flow --flow_skip 100 --tracking_window 100 --scale 1 --no_gt --show_cotrack
         # add one to port
         port=$((port+1))
     done

@@ -51,6 +51,7 @@ class CameraInfo(NamedTuple):
     c_y: np.array = None 
     f_x: np.array = None
     f_y: np.array = None
+    mask: np.array = None
     
    
 class SceneInfo(NamedTuple):
@@ -395,12 +396,20 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 #R = -np.transpose(matrix[:3,:3])
                 #R[:,0] = -R[:,0]
                 #T = -matrix[:3, 3] 
-
-                image_path = os.path.join(path, cam_name)
+                #image_path = os.path.join(path, cam_name)
+                image_path = cam_name
+                mask_path = os.path.join(path, 'masks',file_path)
                 image_name = Path(cam_name).stem
                 image = Image.open(image_path)
-
                 im_data = np.array(image.convert("RGBA"))
+
+                if os.path.exists(mask_path):
+                    mask = np.array(Image.open(mask_path))
+                    # convert from [0-255] to [0-1] (float)
+                    mask = mask / 255.0
+                    mask = PILtoTorch(mask,None)
+                else:
+                    mask = None
 
                 if scale is not None:
                     #cv2 resize according to scale 
@@ -413,7 +422,6 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
                 # image = PILtoTorch(image,(800,800))
                 image = PILtoTorch(image,None)
-                
                 if fovx is not None:
                     fovy = focal2fov(fov2focal(fovx, image.shape[1]), image.shape[2])
                     FovY = fovy 
@@ -421,7 +429,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     
                     cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time,view_id=view_id,time_id=time_id,flow=flow))
+                                time = time,view_id=view_id,time_id=time_id,flow=flow,mask=mask))
                     
                 else:
                     k = np.array(frame['k'])
@@ -447,7 +455,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                     cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                     image_path=image_path, image_name=image_name, width=w, height=h,
-                                    time = time,view_id=view_id,time_id=time_id,flow=flow,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y))
+                                    time = time,view_id=view_id,time_id=time_id,flow=flow,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y
+                                    ,mask=mask))
 
     return cam_infos
 
@@ -500,7 +509,7 @@ def readPanoptoSceneInfo(path, white_background, eval, extension=".png", time_sk
         num_pts = 2000
         print(f"Generating random point cloud ({num_pts})...")
         # We create random points inside the bounds of the synthetic Blender scenes
-        scene_size = 4.0
+        scene_size = 1.6
         xyz = np.random.random((num_pts, 3)) * scene_size - scene_size / 2
         shs = np.random.random((num_pts, 3)) / 255.0
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))

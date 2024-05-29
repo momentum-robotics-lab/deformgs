@@ -32,6 +32,7 @@ from utils.external import *
 tonumpy = lambda x : x.cpu().numpy()
 to8 = lambda x : np.uint8(np.clip(x,0,1)*255)
 
+
 def merge_deform_logs(folder):
     npz_files = glob.glob(os.path.join(folder,'log_deform_*.npz'),recursive=True)
     # sort based on the float number in the file name
@@ -190,14 +191,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         #view.image_height = int(view.image_height * args.scale)
         #view.image_width = int(view.image_width * args.scale)
 
-        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors)
+        render_pkg = render(view, gaussians, pipeline, background,log_deform_path=log_deform_path,no_shadow=args.no_shadow,override_color=force_colors,bounding_box=args.bounding_box)
         rendering = tonumpy(render_pkg["render"]).transpose(1,2,0)
 
         if opacities is None:
             opacities = render_pkg["opacities"].to("cpu").numpy()
             opacity_mask = opacities > opacity_threshold
-        
-            
         
         depth = render_pkg["depth"].to("cpu").numpy()
             
@@ -226,9 +225,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         if args.show_flow:
             traj_img = np.zeros((view.image_height,view.image_width,3))
             current_projections = render_pkg["projections"].to("cpu").numpy()[gt_idxs]
-            
-           
-
             gaussian_positions = render_pkg["means3D_deform"].cpu().numpy()[gt_idxs]
             cam_center = view.camera_center.cpu().numpy()
             current_mask, image_mask = get_mask(projections=current_projections,gaussian_positions=gaussian_positions,depth=depth,cam_center=cam_center,
@@ -453,6 +449,7 @@ if __name__ == "__main__":
     parser.add_argument("--no_gt",action="store_true")
     parser.add_argument("--viz_velocities",action="store_true")
     parser.add_argument("--viz_isometry",action="store_true")
+    parser.add_argument("--bounding_box",nargs='+',type=float,default=None)
 
     args = get_combined_args(parser)
     print("Rendering " , args.model_path)

@@ -18,7 +18,8 @@ class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda", time = 0,
-                 view_id = None, time_id = None, flow = None, c_x = None, c_y = None, f_x = None, f_y = None, width=None, height=None,image_path=None
+                 view_id = None, time_id = None, flow = None, c_x = None, c_y = None, f_x = None, f_y = None, width=None, height=None,image_path=None,
+                 mask=None
                  ):
         super(Camera, self).__init__()
 
@@ -48,7 +49,9 @@ class Camera(nn.Module):
             print(e)
             print(f"[Warning] Custom device {data_device} failed, fallback to default cuda device" )
             self.data_device = torch.device("cuda")
+        
         self.original_image = image.clamp(0.0, 1.0)
+        self.mask = mask
         # .to(self.data_device)
         if self.width is None:
             self.image_width = self.original_image.shape[2]
@@ -90,7 +93,6 @@ class Camera(nn.Module):
         # print(self.projection_matrix)
         # print(self.projection_matrix.shape)
 
-        
         # .cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix)).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
