@@ -92,6 +92,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     gaussians.training_setup(opt)
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
+        if user_args.start_from_iter is not None:
+            first_iter = user_args.start_from_iter
         gaussians.restore(model_params, opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
@@ -179,6 +181,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_shadows = []
         all_shadows_std = []
 
+        deformation_table = gaussians._deformation_table
+
         for viewpoint_cam in viewpoint_cams:
             
             render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
@@ -194,10 +198,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
             visibility_filter_list.append(visibility_filter.unsqueeze(0))
             viewspace_point_tensor_list.append(viewspace_point_tensor)
 
-            all_means_3D_deform.append(render_pkg["means3D_deform"][None,:,:])
-            all_projections.append(render_pkg["projections"][None,:,:])
-            all_rotations.append(norm_quat(render_pkg["rotations"][None,:,:]))
-            all_opacities.append(render_pkg["opacities"][None,:])
+            all_means_3D_deform.append(render_pkg["means3D_deform"][None,deformation_table,:])
+            all_projections.append(render_pkg["projections"][None,deformation_table,:])
+            all_rotations.append(norm_quat(render_pkg["rotations"][None,deformation_table,:]))
+            all_opacities.append(render_pkg["opacities"][None,deformation_table])
             shadows = render_pkg["shadows"]
             if shadows is not None:
                 all_shadows.append(shadows[None,:])
@@ -316,9 +320,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 if args.lambda_velocity > 0 and i > 0:
                     l_velocity += torch.linalg.norm(all_means_3D_deform[i,:,:] - all_means_3D_deform[i-1,:,:],dim=-1).mean()
 
-                # print(knn_dists.shape)
-                # exit()
-                
                 l_iso_tmp = torch.mean(torch.abs(knn_dists-o3d_knn_dists))
 
                 #l_iso_tmp = torch.mean(torch.exp(10*torch.abs(knn_dists - o3d_knn_dists))-1.0)
@@ -349,13 +350,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     curr_offset_in_prev_coord = torch.bmm(rot, curr_offsets.unsqueeze(-1)).squeeze(-1)
                     l_rigid_tmp = weighted_l2_loss_v2(curr_offset_in_prev_coord, prev_offsets, knn_weights)
                     all_l_rigid.append(l_rigid_tmp)
-                    
                 
                 prev_rotations = knn_rotations.clone()
                 prev_offsets = curr_offsets.clone()
-
-                # print(knn_rotations.shape)
-                # exit()
             
             if args.lambda_velocity > 0:
                 l_velocity = l_velocity / (n_cams-1)
@@ -484,6 +481,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
 
+                if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
+                    gaussians.staticfying(mask_threshold=0.8)
+
                 #if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
                     #isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
                     ##velocities = compute_velocities(gaussians)
@@ -519,7 +519,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt_" + str(iteration) + "_" + stage + ".pth")
+
 def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, expname,user_args=None):
     # first_iter = 0
     tb_writer = prepare_output_and_logger(expname)
@@ -636,6 +637,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_wandb",action="store_true",default=False)
     parser.add_argument("--wandb_project",type=str,default="test_project")
     parser.add_argument("--wandb_name",type=str,default="test_name")
+    parser.add_argument("--start_from_iter",type=int,default=None,help="When loading a checkpoint, you can force training from an iteration not equal to the checkpoint iteration. Only affects iteration counter.")
     
     parser.add_argument("--view_skip",default=1,type=int)
     parser.add_argument("--time_skip",type=int,default=1)
@@ -671,7 +673,7 @@ if __name__ == "__main__":
     parser.add_argument("--single_cam_video",action="store_true",help='Only render from the first camera for the video viz')
     parser.add_argument("--coarse_t0",action="store_true")
 
-    parser.add_argument("--staticfying_from",default=10000,type=int)
+    parser.add_argument("--staticfying_from",default=5000,type=int)
     parser.add_argument("--staticfying_until",default=15000,type=int)
     parser.add_argument("--staticfying_interval",default=100,type=int)
     parser.add_argument("--no_reg",action="store_true")
@@ -685,7 +687,6 @@ if __name__ == "__main__":
     if args.use_wandb:
         wandb.init(project=args.wandb_project,name=args.wandb_name)
         wandb.config.update(args)
-
 
     args.save_iterations.append(args.iterations)
     if args.configs:

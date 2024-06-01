@@ -26,7 +26,7 @@ def filter_gaussians(gaussians,bounding_box):
             (gaussians[:,2] > bounding_box[4]) & (gaussians[:,2] < bounding_box[5])
     return mask
 
-def get_pos_t0(pc:GaussianModel):
+def get_pos_t0(pc:GaussianModel,only_dynamic=True):
     means3D = pc.get_xyz
     scales = pc._scaling
     rotations = pc._rotation
@@ -36,11 +36,15 @@ def get_pos_t0(pc:GaussianModel):
     t_0_points, _, _, _, _ =  pc._deformation(means3D[deformation_point], scales[deformation_point], 
                                                                          rotations[deformation_point], opacity[deformation_point],
                                                                          time[deformation_point])  
-    means3D_final = torch.zeros_like(means3D)
-    means3D_final[deformation_point] =  t_0_points
-    means3D_final[~deformation_point] = means3D[~deformation_point]
     
-    return means3D_final
+    if only_dynamic:
+        return t_0_points
+    else:
+        means3D_final = torch.zeros_like(means3D)
+        means3D_final[deformation_point] =  t_0_points
+        means3D_final[~deformation_point] = means3D[~deformation_point]
+    
+        return means3D_final
 
 
 def get_all_pos(pc:GaussianModel):
@@ -136,10 +140,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     # with open('4dgs_inputs/{}.txt'.format(filename), 'w') as f:
     #     print(raster_settings, file=f)
 
-
-   
-
-   
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
@@ -263,6 +263,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         bounding_mask = filter_gaussians(means3D_final,bounding_box)
         mask = mask & bounding_mask
 
+    mask_color = pc.mask_activation(pc._mask.repeat(1,3))
+    #mask = mask & (pc.mask_activation(pc._mask).flatten() > 0.8)
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
     rendered_image, radii, depth = rasterizer(
         means3D = means3D_final[mask],
@@ -275,7 +277,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         cov3D_precomp = cov3D_precomp)
     
 
-    mask_color = pc.mask_activation(pc._mask.repeat(1,3))
     rendered_mask, _, _ = rasterizer(
         means3D = means3D_final[mask],
         means2D = means2D[mask],

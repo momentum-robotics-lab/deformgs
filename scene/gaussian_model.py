@@ -90,8 +90,8 @@ class GaussianModel:
         (self.active_sh_degree, 
         self._xyz,
         self._mask, 
+        deform_state,
         self._deformation_table,
-        self._deformation,
         # self.grid,
         self._features_dc, 
         self._features_rest,
@@ -103,6 +103,7 @@ class GaussianModel:
         denom,
         opt_dict, 
         self.spatial_lr_scale) = model_args
+        self._deformation.load_state_dict(deform_state)
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
         self.denom = denom
@@ -506,10 +507,8 @@ class GaussianModel:
         torch.cuda.empty_cache()
 
 
-    def staticfying(self,isometry,velocities,isometry_threshold=50,velocity_threshold=0.1):
-        mask = isometry < isometry_threshold
-        if velocities is not None:
-            mask = torch.logical_and(mask,velocities > velocity_threshold)
+    def staticfying(self,mask_threshold=0.8):
+        mask = (self.mask_activation(self._mask) > mask_threshold).flatten()
         self._deformation_table = mask
 
     def densify(self, max_grad, min_opacity, extent, max_screen_size):
