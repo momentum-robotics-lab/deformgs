@@ -165,6 +165,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     deformation_point = pc._deformation_table
     shadow_scalars = None
     shadow_scalars_static = None
+
     if stage == "coarse" :
     # if tur
         means3D_deform, scales_deform, rotations_deform, opacity_deform = means3D, scales, rotations, opacity

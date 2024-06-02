@@ -353,7 +353,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 
                 prev_rotations = knn_rotations.clone()
                 prev_offsets = curr_offsets.clone()
-            
             if args.lambda_velocity > 0:
                 l_velocity = l_velocity / (n_cams-1)
 
