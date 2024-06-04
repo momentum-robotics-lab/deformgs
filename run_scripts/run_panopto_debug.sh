@@ -15,14 +15,14 @@ export BASKETBALL="basketball_dnerf"
 export JUGGLE="juggle_dnerf"
 export SOFTBALL="softball_dnerf"
 export FOLD_CLOTH="fold_cloth_short"
-port=6067
+port=6080
 
 for SCENE in $FOLD_CLOTH; 
 do
-    python3 train.py -s "data/panopto/${SCENE}" --port 6067 --expname "panopto/${SCENE}_reg_coarse_all_s_0.5" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 --lambda_rigidity $RIGIDITY_LAMBDA \
-    --lambda_spring $LAMBDA_SPRING --lambda_momentum $LAMBDA_MOMENTUM --k_nearest 5 --lambda_isometric $LAMBDA_ISOMETRIC --view_skip 4 --time_skip 1  --scale 0.5 \
-    --mask_loss_from 0 --checkpoint_iterations 0 100 10000 15000 20000 30000 --reg_iter 10000 \
-    --use_wandb --wandb_project "panopto" --wandb_name "${SCENE}_scale_0.5"  
+    python3 train.py -s "data/panopto/${SCENE}" --port 6067 --expname "panopto/${SCENE}_cotrack_supervision" --configs arguments/mdnerf-dataset/cube.py --lambda_w 100000 --lambda_rigidity $RIGIDITY_LAMBDA \
+    --lambda_spring $LAMBDA_SPRING --lambda_momentum $LAMBDA_MOMENTUM --k_nearest 5 --lambda_isometric $LAMBDA_ISOMETRIC --view_skip 4 --time_skip 1  --scale 0.25 \
+    --mask_loss_from 0 --checkpoint_iterations 0 100 10000 15000 20000 30000 --reg_iter 10000 --lambda_cotrack 0.3 \
+    --use_wandb --wandb_project "panopto" --wandb_name "${SCENE}_cotrack_supervision"  
     port=$((port+1))
 done
 

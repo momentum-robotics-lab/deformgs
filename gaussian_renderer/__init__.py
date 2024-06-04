@@ -97,7 +97,7 @@ def get_all_pos(pc:GaussianModel):
 
 
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None,bounding_box=None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None,bounding_box=None,prev_projections=None):
     """
     Render the scene. 
     
@@ -302,6 +302,40 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     projections_cam[:,0] = ((projections[:,0] + 1.0) * W - 1.0) * 0.5
     projections_cam[:,1] = ((projections[:,1] + 1.0) * H - 1.0) * 0.5
 
+    if prev_projections is not None:
+        prev_projections = torch.tensor(prev_projections).to(projections_cam.device)
+        proj_disp = projections_cam - prev_projections
+    else:
+        proj_disp = None
+
+    # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    rendered_image, radii, depth = rasterizer(
+        means3D = means3D_final[mask],
+        means2D = means2D[mask],
+        shs = shs,
+        colors_precomp = colors_precomp[mask],
+        opacities = opacity[mask],
+        scales = scales_final[mask],
+        rotations = rotations_final[mask],
+        cov3D_precomp = cov3D_precomp,
+        )
+
+    rendered_velocity = None 
+    if proj_disp is not None:
+        # proj_dis : N x 2 
+        # add zeros along ax=1
+        proj_disp = torch.cat([proj_disp,torch.zeros_like(proj_disp[:,0:1])],dim=1)
+        rendered_velocity, _, _ = rasterizer(
+        means3D = means3D_final[mask],
+        means2D = means2D[mask],
+        shs = shs,
+        colors_precomp = proj_disp[mask],
+        opacities = opacity[mask],
+        scales = scales_final[mask],
+        rotations = rotations_final[mask],
+        cov3D_precomp = cov3D_precomp,
+        )
+
     shadows_mean = None
     shadows_std = None
 
@@ -323,5 +357,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             "rotations": rotations_final,
             "opacities": opacity_final,
             "shadows":shadow_scalars_final,
+            "rendered_velocity": rendered_velocity,
             }
 

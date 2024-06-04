@@ -14,6 +14,7 @@ import os
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
+from utils.cotrack_utils import filter_trajs, viz_preds, compute_loss, compute_vel_loss
 from gaussian_renderer import render, network_gui, get_pos_t0
 import sys
 from scene import Scene, GaussianModel
@@ -26,7 +27,6 @@ from arguments import ModelParams, PipelineParams, OptimizationParams, ModelHidd
 from torch.utils.data import DataLoader
 from utils.timer import Timer
 from utils.external import *
-from utils.md_utils import *
 import wandb 
 # import pytorch3d.transforms as transforms
  
@@ -163,7 +163,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         # preprocess mask in [0,1] range
         # add property to gaussian to infer mask 'color'
         # train that on static scene
-
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
@@ -182,13 +181,20 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_shadows_std = []
 
         deformation_table = gaussians._deformation_table
-
+        all_rendered_vels = []
+        prev_projections = None 
+ 
         for viewpoint_cam in viewpoint_cams:
             
-            render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow)
+            render_pkg = render(viewpoint_cam, gaussians, pipe, background, stage=stage,no_shadow=user_args.no_shadow,prev_projections=prev_projections)
             image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
             images.append(image.unsqueeze(0))
             
+            prev_projections = render_pkg["projections"]
+            rendered_vels = render_pkg["rendered_velocity"]
+            if rendered_vels is not None:
+                all_rendered_vels.append(rendered_vels[None,:2])
+
             masks.append(render_pkg["mask"].unsqueeze(0)[:,0])
             gt_mask = viewpoint_cam.mask.cuda()
             gt_masks.append(gt_mask)
@@ -212,6 +218,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
         all_means_3D_deform = torch.cat(all_means_3D_deform,0)
+        all_rendered_vels = torch.cat(all_rendered_vels,0)
 
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -247,11 +254,26 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         # norm
         loss = Ll1
-        
+
+        preds = [cam.preds for cam in viewpoint_cams]
+        # check if preds has no None in list
+        if stage=="fine" and all([pred is not None for pred in preds]) and user_args.lambda_cotrack > 0:
+            preds_1 = torch.tensor(filter_trajs(viewpoint_cams[:2]),device="cuda")
+            loss_1 = compute_vel_loss(all_rendered_vels[0],preds_1)
+
+            preds_2 = torch.tensor(filter_trajs(viewpoint_cams[1:]),device="cuda")
+            loss_2 = compute_vel_loss(all_rendered_vels[1],preds_2)
+
+            cotrack_loss = 0.5 * (loss_1 + loss_2)
+            if not torch.isnan(cotrack_loss) and iteration > user_args.cotrack_loss_from :
+                loss += user_args.lambda_cotrack * cotrack_loss
+
+
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
             wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
-
+            if not torch.isnan(cotrack_loss):
+                wandb.log({"train/cotrack_loss":cotrack_loss},step=iteration) 
         n_cams = len(viewpoint_cams)
 
         l_momentum = None
@@ -681,6 +703,8 @@ if __name__ == "__main__":
     
     parser.add_argument("--mask_loss_from",default = 3000,type=int)
     parser.add_argument("--lambda_mask",default=0.1,type=float)
+    parser.add_argument("--lambda_cotrack",default=0.1,type=float)
+    parser.add_argument("--cotrack_loss_from",default=0,type=int)
 
     args = parser.parse_args(sys.argv[1:])
     if args.use_wandb:

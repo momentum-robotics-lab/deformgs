@@ -52,6 +52,9 @@ class CameraInfo(NamedTuple):
     f_x: np.array = None
     f_y: np.array = None
     mask: np.array = None
+    preds: np.array = None
+    preds_visibility: np.array = None
+
     
    
 class SceneInfo(NamedTuple):
@@ -308,15 +311,14 @@ def generateCamerasFromTransforms(path, template_transformsfile, extension, maxt
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png", mapper = {},time_skip=None,view_skip=None,split='train',panopto=False,scale=None):
     cam_infos = []
     
-    flow_file = os.path.join(path, 'optic_flow',split, "optic_flow.h5")
-    imgpaths_file = os.path.join(path, 'optic_flow',split, "img_paths.npy")
-    # if os.path.exists(flow_file) and os.path.exists(imgpaths_file):
-    if False:
+    flow_file = os.path.join(path, "tracking_pred.h5")
+    imgpaths_file = os.path.join(path, "tracking_img_paths.npy")
+    if os.path.exists(flow_file) and os.path.exists(imgpaths_file):
         data =  h5py.File(flow_file,'r')
         print("Loading optic flow..")
-        all_flow = data['flow'][:]
-        print("optic flow shape: ",all_flow.shape)
-        
+        pred_tracks = data["pred_tracks"][:].squeeze(1)
+        pred_visibility = data["pred_visibility"][:].squeeze(1)
+        # remove 2nd dimension
         print("Finished loading optic flow..")
         img_paths_flow = np.load(imgpaths_file)
 
@@ -325,6 +327,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         all_flow = None
         img_paths_flow = None
 
+    
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         fovx = None 
@@ -371,13 +374,16 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     if view_id % view_skip != 0:
                         continue
 
-                flow = None
+                preds = None
+                preds_visibility = None
                 # check if file_path is in img_paths
-                if img_paths_flow is not None:
-                    if file_path in img_paths_flow:
-                        flow = all_flow[img_paths_flow == file_path]
+                if img_paths_flow is not None and split=="train":
+                    file_path_local = os.path.basename(file_path)
+                    if file_path_local in img_paths_flow:
+                        idx = np.where(img_paths_flow == file_path_local)
+                        preds = pred_tracks[idx]
+                        preds_visibility = pred_visibility[idx]
 
-                
                 cam_name = os.path.join(path, file_path)
                 # time = mapper[frame["time"]]
                 time = frame["time"]
@@ -415,6 +421,9 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     im_data = cv2.resize(im_data,(int(im_data.shape[1]*scale),int(im_data.shape[0]*scale)))
                     if mask is not None:
                         mask = cv2.resize(mask,(int(mask.shape[1]*scale),int(mask.shape[0]*scale)))
+                    if preds is not None:
+                        preds = preds*scale
+
 
                 if mask is not None: 
                     mask = PILtoTorch(mask,None)
@@ -432,7 +441,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     
                     cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                 image_path=image_path, image_name=image_name, width=image.shape[1], height=image.shape[2],
-                                time = time,view_id=view_id,time_id=time_id,flow=flow,mask=mask))
+                                time = time,view_id=view_id,time_id=time_id,mask=mask,preds=preds,preds_visibility=preds_visibility))
                     
                 else:
                     k = np.array(frame['k'])
@@ -458,7 +467,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
                     cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                                     image_path=image_path, image_name=image_name, width=w, height=h,
-                                    time = time,view_id=view_id,time_id=time_id,flow=flow,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y
+                                    time = time,view_id=view_id,time_id=time_id,preds=preds,preds_visibility=preds_visibility,c_x=c_x,c_y=c_y,f_x=f_x,f_y=f_y
                                     ,mask=mask))
 
     return cam_infos

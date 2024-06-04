@@ -117,10 +117,12 @@ class MDNerfDataset(Dataset):
         FovY = caminfo.FovY
         time = caminfo.time
         flow = caminfo.flow
+        preds = caminfo.preds
+        preds_visibility = caminfo.preds_visibility
         return Camera(colmap_id=view_id,R=R,T=T,FoVx=FovX,FoVy=FovY,image=image,gt_alpha_mask=None,
                           image_name=f"{view_id}",uid=view_id,data_device=torch.device("cuda"),time=time,flow=flow,
                           f_x = caminfo.f_x, f_y = caminfo.f_y, c_x = caminfo.c_x, c_y = caminfo.c_y, width = caminfo.width, height = caminfo.height,
-                          view_id=view_id,time_id=time_id,image_path=caminfo.image_path, mask=mask)
+                          view_id=view_id,time_id=time_id,image_path=caminfo.image_path, mask=mask, preds=preds, preds_visibility=preds_visibility)
     def __len__(self):
         
         return self.n_viewpoints

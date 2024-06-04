@@ -70,13 +70,13 @@ class PipelineParams(ParamGroup):
         super().__init__(parser, "Pipeline Parameters")
 class ModelHiddenParams(ParamGroup):
     def __init__(self, parser):
-        self.net_width = 64
+        self.net_width = 128
         self.timebase_pe = 4
-        self.defor_depth = 1
+        self.defor_depth = 3
         self.posebase_pe = 10
         self.scale_rotation_pe = 2
         self.opacity_pe = 2
-        self.timenet_width = 64
+        self.timenet_width = 128
         self.timenet_output = 32
         self.bounds = 1.6
         self.plane_tv_weight = 0.0001
@@ -102,12 +102,12 @@ class OptimizationParams(ParamGroup):
         self.dataloader=False
         self.iterations = 30_000
         self.coarse_iterations = 3000
-        self.position_lr_init = 0.00016
-        self.position_lr_final = 0.0000016
+        self.position_lr_init = 0.000016
+        self.position_lr_final = 0.00000016
         self.position_lr_delay_mult = 0.01
         self.position_lr_max_steps = 20_000
-        self.deformation_lr_init = 0.00016
-        self.deformation_lr_final = 0.000016
+        self.deformation_lr_init = 0.0016
+        self.deformation_lr_final = 0.00016
         self.deformation_lr_delay_mult = 0.01
         self.grid_lr_init = 0.0016
         self.grid_lr_final = 0.00016
