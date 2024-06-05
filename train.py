@@ -250,15 +250,15 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 wandb.log({"train/mask_loss":Lmask},step=iteration)
 
         # write gt_image tensor to pngs 
-        gt_image_tensor_np = gt_image_tensor.cpu().numpy() 
-        gt_image_tensor_np = np.clip(gt_image_tensor_np,0,1)
-        gt_image_tensor_np = (gt_image_tensor_np * 255).astype(np.uint8)
-        gt_image_tensor_np = gt_image_tensor_np.transpose(0,2,3,1)
-        for i in range(gt_image_tensor_np.shape[0]):
-            from PIL import Image
-            image = gt_image_tensor_np[i]
-            image = Image.fromarray(image)
-            image.save(f"gt_image_{i}.png")
+        #gt_image_tensor_np = gt_image_tensor.cpu().numpy() 
+        #gt_image_tensor_np = np.clip(gt_image_tensor_np,0,1)
+        #gt_image_tensor_np = (gt_image_tensor_np * 255).astype(np.uint8)
+        #gt_image_tensor_np = gt_image_tensor_np.transpose(0,2,3,1)
+        #for i in range(gt_image_tensor_np.shape[0]):
+            #from PIL import Image
+            #image = gt_image_tensor_np[i]
+            #image = Image.fromarray(image)
+            #image.save(f"gt_image_{i}.png")
 
         # Ll1 = l2_loss(image, gt_image)
         psnr_ = psnr(image_tensor, gt_image_tensor).mean().double()
@@ -269,23 +269,23 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         preds = [cam.preds for cam in viewpoint_cams]
         cotrack_loss = None
         # check if preds has no None in list
-        if stage=="fine" and all([pred is not None for pred in preds]) and user_args.lambda_cotrack > 0:
-            preds_1 = torch.tensor(filter_trajs(viewpoint_cams[:2]),device="cuda")
-            loss_1 = compute_vel_loss(all_rendered_vels[0],preds_1)
+        #if stage=="fine" and all([pred is not None for pred in preds]) and user_args.lambda_cotrack > 0:
+            #preds_1 = torch.tensor(filter_trajs(viewpoint_cams[:2]),device="cuda")
+            #loss_1 = compute_vel_loss(all_rendered_vels[0],preds_1)
 
-            preds_2 = torch.tensor(filter_trajs(viewpoint_cams[1:]),device="cuda")
-            loss_2 = compute_vel_loss(all_rendered_vels[1],preds_2)
+            #preds_2 = torch.tensor(filter_trajs(viewpoint_cams[1:]),device="cuda")
+            #loss_2 = compute_vel_loss(all_rendered_vels[1],preds_2)
 
-            cotrack_loss = 0.5 * (loss_1 + loss_2)
-            if not torch.isnan(cotrack_loss) and iteration > user_args.cotrack_loss_from :
-                loss += user_args.lambda_cotrack * cotrack_loss
+            #cotrack_loss = 0.5 * (loss_1 + loss_2)
+            #if not torch.isnan(cotrack_loss) and iteration > user_args.cotrack_loss_from :
+                #loss += user_args.lambda_cotrack * cotrack_loss
 
 
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
             wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
-            if cotrack_loss and not torch.isnan(cotrack_loss):
-                wandb.log({"train/cotrack_loss":cotrack_loss},step=iteration) 
+            #if cotrack_loss and not torch.isnan(cotrack_loss):
+                #wandb.log({"train/cotrack_loss":cotrack_loss},step=iteration) 
         n_cams = len(viewpoint_cams)
 
         l_momentum = None
