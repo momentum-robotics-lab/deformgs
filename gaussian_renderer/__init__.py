@@ -97,7 +97,7 @@ def get_all_pos(pc:GaussianModel):
 
 
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="fine",log_deform_path=None,no_shadow=False,split=None,bounding_box=None,prev_projections=None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, stage="coarse",log_deform_path=None,no_shadow=False,split=None,bounding_box=None,prev_projections=None):
     """
     Render the scene. 
     
@@ -335,10 +335,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations_final[mask],
         cov3D_precomp = cov3D_precomp,
         )
-
     shadows_mean = None
     shadows_std = None
-
     if shadow_scalars_final is not None:
         shadows_mean = torch.mean(shadow_scalars_final)
         shadows_std = torch.std(shadow_scalars_final)

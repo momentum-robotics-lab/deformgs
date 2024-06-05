@@ -113,9 +113,16 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     lpips_model = lpips.LPIPS(net="alex").cuda()
     video_cams = scene.getVideoCameras()
     o3d_knn_dists, o3d_knn_indices, knn_weights = None, None, None
-    
+
 
     for iteration in range(first_iter, final_iter+1):        
+        
+        if iteration == user_args.pyramid_iter:  
+            user_args.scale = 0.5 
+            scene = Scene(dataset, gaussians, load_coarse=None, user_args=user_args,freeze_gaussians=True)
+            viewpoint_stack = None
+            
+
         if network_gui.conn == None:
             network_gui.try_connect()
         while network_gui.conn != None:
@@ -196,7 +203,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 all_rendered_vels.append(rendered_vels[None,:2])
 
             masks.append(render_pkg["mask"].unsqueeze(0)[:,0])
-            gt_mask = viewpoint_cam.mask.cuda()
+            if viewpoint_cam.mask is not None:
+                gt_mask = viewpoint_cam.mask.cuda()
+            else:
+                gt_mask = None
             gt_masks.append(gt_mask)
             gt_image = viewpoint_cam.original_image.cuda()
             gt_images.append(gt_image.unsqueeze(0))
@@ -218,7 +228,8 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         all_rotations = torch.cat(all_rotations,0)
         all_opacities = torch.cat(all_opacities,0)
         all_means_3D_deform = torch.cat(all_means_3D_deform,0)
-        all_rendered_vels = torch.cat(all_rendered_vels,0)
+        if len(all_rendered_vels) > 0:
+            all_rendered_vels = torch.cat(all_rendered_vels,0)
 
         radii = torch.cat(radii_list,0).max(dim=0).values
         visibility_filter = torch.cat(visibility_filter_list).any(dim=0)
@@ -256,6 +267,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         loss = Ll1
 
         preds = [cam.preds for cam in viewpoint_cams]
+        cotrack_loss = None
         # check if preds has no None in list
         if stage=="fine" and all([pred is not None for pred in preds]) and user_args.lambda_cotrack > 0:
             preds_1 = torch.tensor(filter_trajs(viewpoint_cams[:2]),device="cuda")
@@ -272,7 +284,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         if user_args.use_wandb and stage == "fine":
             wandb.log({"train/psnr":psnr_,"train/loss":loss},step=iteration)
             wandb.log({"train/num_gaussians":gaussians._xyz.shape[0]},step=iteration)
-            if not torch.isnan(cotrack_loss):
+            if cotrack_loss and not torch.isnan(cotrack_loss):
                 wandb.log({"train/cotrack_loss":cotrack_loss},step=iteration) 
         n_cams = len(viewpoint_cams)
 
@@ -705,6 +717,7 @@ if __name__ == "__main__":
     parser.add_argument("--lambda_mask",default=0.1,type=float)
     parser.add_argument("--lambda_cotrack",default=0.1,type=float)
     parser.add_argument("--cotrack_loss_from",default=0,type=int)
+    parser.add_argument("--pyramid_iter",default=15000,type=int)
 
     args = parser.parse_args(sys.argv[1:])
     if args.use_wandb:

@@ -24,7 +24,7 @@ class Scene:
 
     gaussians : GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[1.0], load_coarse=False,user_args=None):
+    def __init__(self, args : ModelParams, gaussians : GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[1.0], load_coarse=False,user_args=None,freeze_gaussians=False):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -73,7 +73,9 @@ class Scene:
         else:
             assert False, "Could not recognize scene type!"
         self.maxtime = scene_info.maxtime
-        gaussians.all_times = scene_info.all_times
+        
+        if not freeze_gaussians:
+            gaussians.all_times = scene_info.all_times
 
         # if not self.loaded_iter:
         #     with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
@@ -119,36 +121,36 @@ class Scene:
             self.train_camera = FourDGSdataset(scene_info.train_cameras, args)
             print("Loading Test Cameras, 4DGS")
             self.test_camera = FourDGSdataset(scene_info.test_cameras, args)
-        
         self.train_camera_individual = FourDGSdataset(scene_info.train_cameras, args)
         self.test_camera_individual = FourDGSdataset(scene_info.test_cameras, args)
         
         print("Loading Video Cameras")
         self.video_camera = cameraList_from_camInfos(scene_info.video_cameras,-1,args)
-        xyz_max = scene_info.point_cloud.points.max(axis=0)
-        xyz_min = scene_info.point_cloud.points.min(axis=0)
-        self.gaussians._deformation.deformation_net.grid.set_aabb(xyz_max,xyz_min)
-        if self.loaded_iter:
-            self.gaussians.load_ply(os.path.join(self.model_path,
-                                                           "point_cloud",
-                                                           "iteration_" + str(self.loaded_iter),
-                                                           "point_cloud.ply"))
-            self.gaussians.load_model(os.path.join(self.model_path,
-                                                    "point_cloud",
-                                                    "iteration_" + str(self.loaded_iter),
-                                                   ))
-        # elif load_coarse:
-        #     self.gaussians.load_ply(os.path.join(self.model_path,
-        #                                                    "point_cloud",
-        #                                                    "coarse_iteration_" + str(load_coarse),
-        #                                                    "point_cloud.ply"))
-        #     self.gaussians.load_model(os.path.join(self.model_path,
-        #                                             "point_cloud",
-        #                                             "coarse_iteration_" + str(load_coarse),
-        #                                            ))
-        #     print("load coarse stage gaussians")
-        else:
-            self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent, self.maxtime)
+        if not freeze_gaussians:
+            xyz_max = scene_info.point_cloud.points.max(axis=0)
+            xyz_min = scene_info.point_cloud.points.min(axis=0)
+            self.gaussians._deformation.deformation_net.grid.set_aabb(xyz_max,xyz_min)
+            if self.loaded_iter:
+                self.gaussians.load_ply(os.path.join(self.model_path,
+                                                            "point_cloud",
+                                                            "iteration_" + str(self.loaded_iter),
+                                                            "point_cloud.ply"))
+                self.gaussians.load_model(os.path.join(self.model_path,
+                                                        "point_cloud",
+                                                        "iteration_" + str(self.loaded_iter),
+                                                    ))
+            # elif load_coarse:
+            #     self.gaussians.load_ply(os.path.join(self.model_path,
+            #                                                    "point_cloud",
+            #                                                    "coarse_iteration_" + str(load_coarse),
+            #                                                    "point_cloud.ply"))
+            #     self.gaussians.load_model(os.path.join(self.model_path,
+            #                                             "point_cloud",
+            #                                             "coarse_iteration_" + str(load_coarse),
+            #                                            ))
+            #     print("load coarse stage gaussians")
+            else:
+                self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent, self.maxtime)
 
     def save(self, iteration, stage):
         if stage == "coarse":

@@ -9,10 +9,10 @@ export BASKETBALL="basketball_dnerf"
 export JUGGLE="juggle_dnerf"
 export SOFTBALL="softball_dnerf"
 export FOLD_CLOTH="fold_cloth_short"
+export YUNCHAO="real_yunchao_test"
 
-
-for SCENE in $FOLD_CLOTH; 
+for SCENE in $YUNCHAO; 
 do
-    python3 render_experimental.py --model_path "output/panopto/${SCENE}_cotrack_supervision"  --configs arguments/mdnerf-dataset/cube.py --view_skip 20 --time_skip 1 --scale 0.5 --skip_video \
+    python3 render_experimental.py --model_path "output/panopto/${SCENE}"  --configs arguments/mdnerf-dataset/cube.py --view_skip 1 --time_skip 1000 --scale 1.0 --skip_video \
     --show_flow --flow_skip 80 --tracking_window 10  
 done
