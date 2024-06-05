@@ -237,14 +237,14 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         gt_image_tensor = torch.cat(gt_images,0)
         # Loss
         Ll1 = l1_loss(image_tensor, gt_image_tensor)
-
+        mask_available = False
         # check if masks exist
         # if gt_masks has no None in list
         if all([mask is not None for mask in gt_masks]):
             Lmask = l1_loss(torch.cat(masks,0),torch.cat(gt_masks,0))
             if iteration > user_args.mask_loss_from and user_args.lambda_mask > 0:
                 Ll1 += user_args.lambda_mask * Lmask
-
+            mask_available = True
 
             if user_args.use_wandb:
                 wandb.log({"train/mask_loss":Lmask},step=iteration)
@@ -514,7 +514,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                     opacity_threshold = opt.opacity_threshold_fine_init - iteration*(opt.opacity_threshold_fine_init - opt.opacity_threshold_fine_after)/(opt.densify_until_iter)  
                     densify_threshold = opt.densify_grad_threshold_fine_init - iteration*(opt.densify_grad_threshold_fine_init - opt.densify_grad_threshold_after)/(opt.densify_until_iter )  
 
-                if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
+                if stage == "fine" and mask_available and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
                     gaussians.staticfying(mask_threshold=0.8)
 
                 #if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
