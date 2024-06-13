@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--results',type=str,default="/data/bart/CVPR_2024/final_results/")
 parser.add_argument('--output',type=str,default="/data/bart/4DGaussians/output/final_scenes/")
 
-parser.add_argument('--test_path',type=str,default="test/ours_20000")
+parser.add_argument('--test_path',type=str,default="test/ours_30000")
 parser.add_argument("--executable",type=str,default="/data/bart/4DGaussians/scripts/align_eval_trajs.py")
 args = parser.parse_args()
 

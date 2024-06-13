@@ -14,7 +14,7 @@ import os
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim, l2_loss, lpips_loss
-from utils.cotrack_utils import filter_trajs, viz_preds, compute_loss, compute_vel_loss
+#from utils.cotrack_utils import filter_trajs, viz_preds, compute_loss, compute_vel_loss
 from gaussian_renderer import render, network_gui, get_pos_t0
 import sys
 from scene import Scene, GaussianModel
