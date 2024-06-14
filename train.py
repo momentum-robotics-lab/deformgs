@@ -107,7 +107,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     ema_psnr_for_log = 0.0
 
     final_iter = train_iter
-    
     progress_bar = tqdm(range(first_iter, final_iter), desc="Training progress")
     first_iter += 1
     lpips_model = lpips.LPIPS(net="alex").cuda()
@@ -115,12 +114,11 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     o3d_knn_dists, o3d_knn_indices, knn_weights = None, None, None
 
 
-    for iteration in range(first_iter, final_iter+1):        
-        
-        if iteration == user_args.pyramid_iter:  
-            user_args.scale = 0.5 
-            scene = Scene(dataset, gaussians, load_coarse=None, user_args=user_args,freeze_gaussians=True)
-            viewpoint_stack = None
+    for iteration in range(first_iter, final_iter+1):   
+        #if iteration == user_args.pyramid_iter:  
+            #user_args.scale = 0.5 
+            #scene = Scene(dataset, gaussians, load_coarse=None, user_args=user_args,freeze_gaussians=True)
+            #viewpoint_stack = None
             
 
         if network_gui.conn == None:
