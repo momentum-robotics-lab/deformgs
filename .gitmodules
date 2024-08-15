@@ -13,3 +13,6 @@
 [submodule "XMem"]
 	path = XMem
 	url = git@github.com:momentum-robotics-lab/splatting-masking.git
+[submodule "robo360"]
+	path = robo360
+	url = git@github.com:momentum-robotics-lab/robo360.git
