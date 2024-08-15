@@ -10,3 +10,6 @@
 [submodule "SIBR_viewers"]
 	path = SIBR_viewers
 	url = https://gitlab.inria.fr/sibr/sibr_core
+[submodule "XMem"]
+	path = XMem
+	url = git@github.com:momentum-robotics-lab/splatting-masking.git
