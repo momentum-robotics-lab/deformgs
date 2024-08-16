@@ -244,7 +244,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 Ll1 += user_args.lambda_mask * Lmask
             mask_available = True
 
-            if user_args.use_wandb:
+            if stage=="fine" and user_args.use_wandb:
                 wandb.log({"train/mask_loss":Lmask},step=iteration)
 
         # write gt_image tensor to pngs 

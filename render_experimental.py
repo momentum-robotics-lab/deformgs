@@ -163,7 +163,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     view_id = views[0].view_id
 
     arrow_color = (0,255,0)
-    arrow_tickness = 1
+    arrow_tickness = 2
     raddii_threshold = 0
     #opacity_threshold = -10e10 # disabling this effectively
     opacity_threshold = 0.005
@@ -237,7 +237,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                     color_idx = (i//args.flow_skip) % len(colors)
                     cv2.circle(rendering,(int(current_projections[i,0]),int(current_projections[i,1])),2,colors[color_idx],-1)
                     # rendering[int(current_projections[i,0]),int(current_projections[i,1]),:] = colors[color_idx]
-
             if view_id != view.view_id:
                 prev_projections = None
                 all_trajs = None
@@ -289,7 +288,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
                 prev_mask = current_mask
                 prev_time = view_time
             view_id = view.view_id
-            
         
         render_list.append(rendering)
             

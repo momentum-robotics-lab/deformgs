@@ -362,13 +362,20 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 
                 # format is r_viewid_timeid
                 
-                if len(file_name.split("_")) > 2:
-                    view_id = int(file_name.split("_")[-2])
-                    time_id = int(file_name.split("_")[-1])
-                else:
-                    # compute view_id and time_id based on unique transforms and times
-                    view_id = np.where(np.all(unique_transforms == np.array(frame["transform_matrix"]),axis=1))[0][0]
-                    time_id = np.where(unique_times == frame["time"])[0][0]
+                #if len(file_name.split("_")) > 2:
+                    #view_id = int(file_name.split("_")[-2])
+                    #time_id = int(file_name.split("_")[-1])
+                #else:
+                    ## compute view_id and time_id based on unique transforms and times
+                    #view_id = np.where(np.all(unique_transforms == np.array(frame["transform_matrix"]),axis=1))[0][0]
+                    #time_id = np.where(unique_times == frame["time"])[0][0]
+
+                view_id = int(file_name.split("_")[-2])
+                time_id = int(file_name.split("_")[-1])
+
+
+                #if view_id != 0:
+                    #continue
 
                 if view_skip is not None:
                     if view_id % view_skip != 0:

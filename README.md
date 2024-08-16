@@ -65,6 +65,10 @@ Run the following script to render images for all scenes.
 
 There are some other useful scripts in the run_scripts directory. Some of it is messy and needs to be cleaned up, but they'll allow you to easily run ablations and log the results.
 
+## How to prepare your dataset?
+
+
+
 
 ---
 ## Contributions

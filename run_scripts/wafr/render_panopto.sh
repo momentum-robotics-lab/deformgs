@@ -9,10 +9,10 @@ export BASKETBALL="basketball_dnerf"
 export JUGGLE="juggle_dnerf"
 export SOFTBALL="softball_dnerf"
 export FOLD_CLOTH="fold_cloth_short"
-
+export CLOTH_FILTERED="cloth_filtered"
 
 for SCENE in $FOLD_CLOTH; 
 do
-    python3 render_experimental.py --model_path "output/panopto/${SCENE}_reg_coarse_all_more_iso"  --configs arguments/mdnerf-dataset/cube.py --view_skip 20 --time_skip 1 --scale 0.5 --skip_video \
-    --show_flow --flow_skip 40 --tracking_window 10 --log_deform 
+    python3 render_experimental.py --model_path "output/panopto/${SCENE}_reg_coarse_all"  --configs arguments/mdnerf-dataset/cube.py --view_skip 5 --time_skip 1 --scale 0.5 --skip_video \
+    --show_flow --flow_skip 40 --tracking_window 60 --log_deform 
 done

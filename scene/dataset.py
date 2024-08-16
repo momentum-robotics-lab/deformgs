@@ -30,8 +30,8 @@ class FourDGSdataset(Dataset):
         FovY = caminfo.FovY
         time = caminfo.time
         flow = caminfo.flow
-        view_id = self.viewpoint_ids[index]
-        time_id = self.time_ids[index]
+        view_id = self.viewpoint_ids[self.idxs[index]]
+        time_id = self.time_ids[self.idxs[index]]
         preds = caminfo.preds
         preds_visibility = caminfo.preds_visibility
 
