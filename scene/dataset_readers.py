@@ -570,7 +570,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", time_s
         video_cam_infos = readCamerasFromTransforms(path, "video.json", white_background, extension, timestamp_mapper, time_skip=1,view_skip=1,split='video')
 
     if video_cam_infos is None:
-        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip,single_cam_video=single_cam_video)
+        video_cam_infos = generateCamerasFromTransforms(path, "transforms_train.json", extension, max_time, time_skip=time_skip,single_cam_video=False)
 
     if not eval:
         train_cam_infos.extend(test_cam_infos)

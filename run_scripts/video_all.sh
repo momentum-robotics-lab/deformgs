@@ -1,6 +1,0 @@
-python3 render_experimental.py --model_path output/final_scenes/scene_1/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow
-python3 render_experimental.py --model_path output/final_scenes/scene_2/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow
-python3 render_experimental.py --model_path output/final_scenes/scene_3/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow
-python3 render_experimental.py --model_path output/final_scenes/scene_5/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow
-python3 render_experimental.py --model_path output/final_scenes/scene_6/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow
-python3 render_experimental.py --model_path output/final_scenes/scene_7/ --skip_train --skip_test --configs arguments/mdnerf-dataset/cube.py --view_skip 100 --flow_skip 1 --show_flow

@@ -515,12 +515,6 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
                 if stage == "fine" and mask_available and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
                     gaussians.staticfying(mask_threshold=0.8)
 
-                #if stage == "fine" and iteration % user_args.staticfying_interval == 0 and iteration > user_args.staticfying_from and iteration < user_args.staticfying_until:
-                    #isometry = compute_isometry(gaussians,args.k_nearest,exp=True)
-                    ##velocities = compute_velocities(gaussians)
-                    #velocities = None
-                    #gaussians.staticfying(isometry=isometry,velocities=velocities,isometry_threshold=15.0,velocity_threshold=0.1) 
-
                 if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0 :
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     

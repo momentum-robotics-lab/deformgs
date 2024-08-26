@@ -2,7 +2,7 @@
 
 ## arXiv Preprint
 
-### [Project Page](https://md-splatting.github.io/)| [arXiv Paper](https://arxiv.org/abs/2312.00583)
+### [Project Page](https://deformgs.github.io)| [Paper](https://deformgs.github.io/paper.pdf)
 
 ---------------------------------------------------
 
@@ -13,38 +13,60 @@
 
 ## Installation 
 
-**Docker Image**
+**Pull the code**
 
-We use docker to run our code, you will need to install docker and [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). You can build the docker image by running the following command:
 ```
-docker build -f md_splatting.dockerfile -t md_splatting .
+git clone --recursive https://github.com/momentum-robotics-lab/deformgs.git
+```
+
+**Docker**
+
+We use docker to run the code, you will need to install docker and [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). You can build the docker image by running the following command:
+```
+docker build -f deformgs.dockerfile -t deformgs .
 ```
 
 If you don't want to build the docker image, you can pull a pre-built image from docker hub:
 ```
-docker pull bartduis/md_splatting:latest
+docker pull bartduis/deformgs:latest
 ```
 
 Now create a container from the image and run it.
 ``` 
-docker run -it --gpus all --network=host --shm-size=2G  --name md_splatting -v /home/username:/workspace md_splatting
+docker run -it --gpus all --network=host --shm-size=50G  --name deformgs -v /home/username:/workspace deformgs
 cd /workspace 
 pip install -e submodules/depth-diff-gaussian-rasterization
 pip install -e submodules/simple-knn
 ```
 At this point your container is ready to run the code.
 
-
-## Data
-**For synthetic scenes:**  
-The dataset provided [here](https://drive.google.com/drive/folders/116XTLBUvuiEQPjKXKZP8fYab3F3L1cCd?usp=sharing) can be used with MD-Splatting to enable novel view synthesis and dense tracking. After downloading the dataset, extract the files to the `data` folder. The folder structure should look like this:
+**Conda**
 
 ```
+conda create -n deformgs python=3.7 
+conda activate deformgs
+
+pip install -r requirements.txt
+pip install -e submodules/depth-diff-gaussian-rasterization
+pip install -e submodules/simple-knn
+```
+
+Please let us know if you experience any issues with installing the code, using docker should be most reliable.
+
+## Data from the Paper
+
+We make the data used in the paper available [here](https://cmu.box.com/s/hb2dx2ax8q3ovcwg5kfans3xd5w7d2vq).
+Place the downloaded folders in the `deformgs/data/` folder to arrive at a folder structure like this:
+```
 ├── data
-│   | final_scenes 
+│   | real 
+│     ├── duvet
+│     ├── cloth 
+│   | synthetic 
 │     ├── scene_1
-│     ├── scene_2 
 │     ├── ...
+│     ├── scene_6
+
 ```
 
 
@@ -61,11 +83,11 @@ Run the following script to render images for all scenes.
 ./run_scripts/render_all.sh
 ```
 
-## Run Scripts
 
-There are some other useful scripts in the run_scripts directory. Some of it is messy and needs to be cleaned up, but they'll allow you to easily run ablations and log the results.
 
 ## How to prepare your dataset?
+
+
 
 
 

@@ -165,8 +165,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     arrow_color = (0,255,0)
     arrow_tickness = 2
     raddii_threshold = 0
-    #opacity_threshold = -10e10 # disabling this effectively
-    opacity_threshold = 0.005
+    opacity_threshold = -10e10 # disabling this effectively
+    #opacity_threshold = 0.005
     depth_dist_threshold = 1.0
     
     opacities = None
