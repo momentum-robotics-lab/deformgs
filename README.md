@@ -59,7 +59,7 @@ We make the data used in the paper available [here](https://cmu.box.com/s/hb2dx2
 Place the downloaded folders in the `deformgs/data/` folder to arrive at a folder structure like this:
 ```
 ├── data
-│   | real 
+│   | robo360 
 │     ├── duvet
 │     ├── cloth 
 │   | synthetic 
@@ -71,16 +71,18 @@ Place the downloaded folders in the `deformgs/data/` folder to arrive at a folde
 
 
 ## Training
-To train models for all scenes from the paper, run the following script:
+To train models for all scenes from the paper, run the following scripts.
 ``` 
-./run_scripts/run_all.sh
+./run_scripts/run_all_synthetic.sh
+./run_scripts/run_all_robo360.sh
 ``` 
 
 ## Rendering
 Run the following script to render images for all scenes. 
 
 ```
-./run_scripts/render_all.sh
+./run_scripts/render_all_synthetic.sh
+./run_scripts/render_all_robo360.sh
 ```
 
 
