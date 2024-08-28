@@ -4,9 +4,6 @@
 
 ### [Project Page](https://deformgs.github.io)| [Paper](https://deformgs.github.io/paper.pdf)
 
----------------------------------------------------
-
----
 
 ![block](assets/teaserfig.png)   
 
