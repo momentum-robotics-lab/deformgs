@@ -64,7 +64,7 @@ Please let us know if you experience any issues with installing the code, using 
 
 ## Data from the Paper
 
-We make the data used in the paper available [here](https://cmu.box.com/s/hb2dx2ax8q3ovcwg5kfans3xd5w7d2vq).
+We make the data used in the paper available [here](https://cmu.box.com/v/wafrdeformgs).
 Place the downloaded folders in the `deformgs/data/` folder to arrive at a folder structure like this:
 ```
 ├── data
