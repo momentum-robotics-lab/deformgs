@@ -1,6 +1,6 @@
-# MD-Splatting: Learning Metric Deformation from 4D Gaussians in Highly Deformable Scenes
+# DeformGS: Scene Flow in Highly Deformable Scenes for Deformable Object Manipulation
 
-## arXiv Preprint
+## WAFR 2024
 
 ### [Project Page](https://deformgs.github.io)| [Paper](https://deformgs.github.io/paper.pdf)
 
@@ -19,9 +19,34 @@
 git clone --recursive https://github.com/momentum-robotics-lab/deformgs.git
 ```
 
-**Docker**
+**Conda in Docker**
+We use docker to run the code, you will need to install docker and [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). You can replicate our setup using the following commands:
+```
+docker pull bartduis/4dgaussians:latest
+docker run -it --gpus all --network=host --shm-size=50G  --name deformgs -v /home/username:/workspace bartduis/4dgaussians:latest
+conda activate Gaussians4D
+cd /workspace 
+pip install -e submodules/depth-diff-gaussian-rasterization
+pip install -e submodules/simple-knn
+pip3 install h5py open3d seaborn
+```
 
-We use docker to run the code, you will need to install docker and [nvidia-docker](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). You can build the docker image by running the following command:
+**Conda without Docker**
+This has not been tested exhaustively, but worked in our testing.
+
+```
+conda create -n deformgs python=3.7 
+conda activate deformgs
+
+pip install -r requirements.txt
+pip install -e submodules/depth-diff-gaussian-rasterization
+pip install -e submodules/simple-knn
+```
+
+**Docker without Conda**
+
+We also provide a dockerfile and image without Conda.
+You can build the docker image by running the following command:
 ```
 docker build -f deformgs.dockerfile -t deformgs .
 ```
@@ -38,20 +63,7 @@ cd /workspace
 pip install -e submodules/depth-diff-gaussian-rasterization
 pip install -e submodules/simple-knn
 ```
-At this point your container is ready to run the code.
-
-**Conda**
-
-```
-conda create -n deformgs python=3.7 
-conda activate deformgs
-
-pip install -r requirements.txt
-pip install -e submodules/depth-diff-gaussian-rasterization
-pip install -e submodules/simple-knn
-```
-
-Please let us know if you experience any issues with installing the code, using docker should be most reliable.
+Please let us know if you experience any issues with installing the code, using docker with Conda should be most reliable, this is how we ran the experiments.
 
 ## Data from the Paper
 
@@ -60,15 +72,15 @@ Place the downloaded folders in the `deformgs/data/` folder to arrive at a folde
 ```
 ├── data
 │   | robo360 
+│     ├── cloth
 │     ├── duvet
-│     ├── cloth 
+│     ├── xarm_fold_tshirt
 │   | synthetic 
 │     ├── scene_1
 │     ├── ...
 │     ├── scene_6
 
 ```
-
 
 ## Training
 To train models for all scenes from the paper, run the following scripts.
@@ -85,31 +97,20 @@ Run the following script to render images for all scenes.
 ./run_scripts/render_all_robo360.sh
 ```
 
-
-
 ## How to prepare your dataset?
 
+Follow the readme's in the robo360 submodule [here](robo360/README.md), and in the XMem folder [here](XMem/splatting_README.md).
 
-
-
-
-
----
 ## Contributions
-
----
 Some source code of ours is borrowed from [3DGS](https://github.com/graphdeco-inria/gaussian-splatting), [k-planes](https://github.com/Giodiro/kplanes_nerfstudio),[HexPlane](https://github.com/Caoang327/HexPlane), [TiNeuVox](https://github.com/hustvl/TiNeuVox), [4DGS](https://github.com/hustvl/4DGaussians). We appreciate the excellent works of these authors.
-
-
 
 ## Citation
 ```
-@misc{duisterhof2023mdsplatting,
-      title={MD-Splatting: Learning Metric Deformation from 4D Gaussians in Highly Deformable Scenes}, 
-      author={Bardienus P. Duisterhof and Zhao Mandi and Yunchao Yao and Jia-Wei Liu and Mike Zheng Shou and Shuran Song and Jeffrey Ichnowski},
-      year={2023},
-      eprint={2312.00583},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@inproceedings{duisterhof2024deformgs,
+      title={DeformGS: Scene Flow in Highly Deformable Scenes for Deformable Object Manipulation}, 
+      author={ Bardienus P. Duisterhof, Zhao Mandi, Yunchao Yao, Jia-Wei Liu, Jenny Seidenschwarz, Mike Zheng Shou, Deva ramanan, Shuran Song,
+      Stan Birchfield, Bowen Wen, Jeffrey Ichnowski},
+      booktitle={The 16th International Workshop on the Algorithmic Foundations of Robotics (WAFR)}
+      year={2024},
 }
 ```

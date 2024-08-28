@@ -77,35 +77,8 @@ class Scene:
         if not freeze_gaussians:
             gaussians.all_times = scene_info.all_times
 
-        # if not self.loaded_iter:
-        #     with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
-        #         dest_file.write(src_file.read())
-        #     json_cams = []
-        #     camlist = []
-        #     if scene_info.test_cameras:
-        #         camlist.extend(scene_info.test_cameras)
-        #     if scene_info.train_cameras:
-        #         camlist.extend(scene_info.train_cameras)
-            
-        #     for id, cam in enumerate(camlist):
-        #         json_cams.append(camera_to_JSON(id, cam))
-        #     with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
-        #         json.dump(json_cams, file)
-
-        # if shuffle:
-        #     random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
-        #     random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
-
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
-        # for resolution_scale in resolution_scales:
-            # print("Loading Training Cameras")
-            # self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
-            # print("Loading Test Cameras")
-            # self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
-            # print("Loading Video Cameras")
-            # self.video_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.video_cameras, resolution_scale, args)
-        
         if user_args.three_steps_batch:
             print("Loading Training Cameras, MDNeRF")
             self.train_camera = MDNerfDataset(scene_info.train_cameras, args)
@@ -114,7 +87,6 @@ class Scene:
 
             print("Loading Test Cameras, MDNeRF")
             self.test_camera = MDNerfDataset(scene_info.test_cameras, args)
-            
             
         else:
             print("Loading Training Cameras, 4DGS")
@@ -139,16 +111,6 @@ class Scene:
                                                         "point_cloud",
                                                         "iteration_" + str(self.loaded_iter),
                                                     ))
-            # elif load_coarse:
-            #     self.gaussians.load_ply(os.path.join(self.model_path,
-            #                                                    "point_cloud",
-            #                                                    "coarse_iteration_" + str(load_coarse),
-            #                                                    "point_cloud.ply"))
-            #     self.gaussians.load_model(os.path.join(self.model_path,
-            #                                             "point_cloud",
-            #                                             "coarse_iteration_" + str(load_coarse),
-            #                                            ))
-            #     print("load coarse stage gaussians")
             else:
                 self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent, self.maxtime)
 

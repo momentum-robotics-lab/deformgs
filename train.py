@@ -544,7 +544,10 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt_" + str(iteration) + "_" + stage + ".pth")
+                try:
+                    torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt_" + str(iteration) + "_" + stage + ".pth")
+                except Exception as e:
+                    print("Error saving checkpoint: ", e)
 
 def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, expname,user_args=None):
     # first_iter = 0
